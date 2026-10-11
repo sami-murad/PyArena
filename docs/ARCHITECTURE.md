@@ -85,6 +85,7 @@ With `REDIS_URL` set, several API processes (replicas) can run behind one load b
 | Winner | atomic `UPDATE` | unchanged (the database is the authority either way) |
 | Timers and state transitions | compare-and-set `UPDATE`s | unchanged: any process may run them; only one wins each transition |
 | Idempotency keys | database | database |
+| Focus Mode state | database | database |
 
 `tests/test_multi_replica.py` runs two API servers on one Redis, with the host connected to one and the guest to the other, and plays a full match.
 
@@ -102,3 +103,27 @@ Known limits: a crashed process leaves its sockets counted as online until the p
 - `services/`: `apiClient.ts` (fetch wrapper, readable errors) and `socketClient.ts`.
 - `features/*/services`: API calls per feature; `features/*/hooks`: state and side effects; components only render.
 - `components/editor/`: Monaco bundled locally (no CDN), only the Python language registered, theme built from the CSS tokens.
+- `app/router.tsx`: every page has its own error boundary (`RouteError`), rendered inside the layout so navigation keeps working when one page fails.
+- `features/scroll/`: Lenis smooth scrolling on marketing pages only, reveal-on-scroll and hero-only parallax; workspaces scroll natively and every inner scroller carries `data-lenis-prevent`.
+
+### Mascot, sound and reactions
+
+```
+features emit events ──▶ reactions/reactionBus ──▶ reactions/useReactions (the only decider)
+                                                      │                    │
+                                                      ▼                    ▼
+                                    mascot/MascotContext (mood)   sound/soundManager (sound)
+                                                      │
+                                                      ▼
+                                       mascot/Mascot (sticker, bubble, badge, confetti)
+```
+
+- Features never call the mascot or the sound directly; they emit domain events (`run:finished`, `competition:won`, `focus:violation`, ...).
+- `useReactions` maps each event to a reaction (mood, line, badge, sound). A sound plays only if the mascot actually showed the reaction, so sound and picture always agree, and every sound has a visible twin (mood plus badge).
+- Moods have a precedence table (`mascot/moods.ts`): trophy > celebrate > concerned > happy > encouraging > thinking > idle. A lower-priority reaction never interrupts a higher one.
+- Sounds are synthesised with the Web Audio API (no audio files), each with a priority and a minimum interval; the AudioContext is created on the first user gesture, and mute is remembered.
+- The mascot, Deb, is original art drawn as code (`scripts/deb/`, 28 stickers); `config/mascots.ts` maps the stickers to the seven moods.
+
+### Focus Mode
+
+`features/focus/`: `FocusModeProvider` (one per room) loads the player's focus state, runs `useFocusGuard` (browser signals, never blocking) and `useFocusHeartbeat` while the round runs, and reports to `/api/v1/competitions/{id}/focus`. The server (`app/services/focus.py`) times absences, applies the 2-second grace and the escalation ladder, and enforces pauses, freezes and disqualification when submissions arrive. See ADR 0006.

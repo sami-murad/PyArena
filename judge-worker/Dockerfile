@@ -38,4 +38,5 @@ EXPOSE 8001
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2)"
 
-CMD ["uvicorn", "runner:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+# On SIGTERM, running jobs get up to 25 s to finish (compose allows 30 s).
+CMD ["uvicorn", "runner:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1", "--timeout-graceful-shutdown", "25"]

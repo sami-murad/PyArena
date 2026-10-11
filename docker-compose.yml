@@ -18,6 +18,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks: [data]
+    mem_limit: 1g
+    stop_grace_period: 30s # lets PostgreSQL finish a clean shutdown checkpoint
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -31,6 +33,7 @@ services:
     # survive a restart, so persistence is off.
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru"]
     networks: [data]
+    mem_limit: 192m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -58,6 +61,7 @@ services:
     pids_limit: 256
     mem_limit: 1g
     cpus: 2
+    stop_grace_period: 30s
 
   backend:
     build:
@@ -70,7 +74,7 @@ services:
       redis:
         condition: service_healthy
       worker:
-        condition: service_started
+        condition: service_healthy
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pyarena}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pyarena}
@@ -85,6 +89,9 @@ services:
       LOG_FORMAT: json
       METRICS_TOKEN: ${METRICS_TOKEN:-}
     networks: [web, data, judge]
+    mem_limit: 768m
+    cpus: 1.5
+    stop_grace_period: 30s
 
   frontend:
     build:
@@ -96,6 +103,7 @@ services:
     ports:
       - "${HTTP_PORT:-8080}:8080"
     networks: [web]
+    mem_limit: 128m
 
 networks:
   web:

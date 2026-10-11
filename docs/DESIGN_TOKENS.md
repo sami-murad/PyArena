@@ -25,9 +25,14 @@ The only fixed colours outside the theme maps are in `public/logo.svg` and `favi
 | `surface` | `#142035` | `#ffffff` | panels |
 | `text` | `#e8edf6` | `#13213a` | body text |
 | `muted` | `#94a2bd` | `#55627c` | secondary text |
+| `subtle` | `#8693ac` | `#5d697d` | tertiary text (footer, hints) |
 | `primary` | `#ffd43b` | `#ffd43b` | main actions (dark text on top) |
 | `accent` | `#7fb2e5` | `#2a64a8` | links, focus, judging |
 | `success` / `danger` / `warning` | green / red / amber | darker variants | verdicts |
+
+Every text colour reaches at least 4.5:1 contrast (WCAG AA) on every surface in its theme. The `subtle` values were darkened/lightened after the axe-core check (`frontend/e2e/a11y.spec.ts`) flagged the footer at 4.18:1 (dark) and 3.39:1 (light); the same check runs in CI, so a new colour that fails contrast fails the build.
+
+The mascot stickers use their own fixed palette (navy `#0B1B2B`, yellow `#FFCB3D`, cream `#FFF5E1`, coral `#FF6B6B`, mint `#7BD389`, plus Deb's skin and hair tones) and look the same in both themes; see `frontend/scripts/deb/parts.mjs`.
 
 Type: **Fredoka** (`--font-display`, headings), **Inter** (`--font-body`, interface), **JetBrains Mono** (`--font-code`, code; ligatures off so `->` looks as typed) and **Comic Neue** (`--font-mascot`, the mascot's speech bubbles only, never body text). All four are under the SIL Open Font License and self-hosted through `@fontsource` packages, so no request goes to a font CDN. The production build preloads the latin subsets of Inter and Fredoka (`preloadFonts` in `vite.config.ts`).
 
