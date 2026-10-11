@@ -36,7 +36,7 @@ export function OutputConsole({ phase, result, error }: OutputConsoleProps) {
           )}
         </div>
       </header>
-      <div className="console__body" tabIndex={0} aria-label="Program output">
+      <div data-lenis-prevent className="console__body" tabIndex={0} aria-label="Program output">
         {phase === "idle" && (
           <p className="console__placeholder">
             Output appears here. Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to run.

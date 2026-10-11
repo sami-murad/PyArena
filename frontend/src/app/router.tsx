@@ -27,7 +27,7 @@ export const router = createBrowserRouter([
   {
     element: <MainLayout />,
     children: [
-      { index: true, element: <HomePage /> },
+      { index: true, element: <HomePage />, handle: { marketing: true } },
       { path: "playground", element: page(<PlaygroundPage />), handle: { workspace: true } },
       { path: "questions", element: page(<QuestionsPage />) },
       { path: "questions/:questionId", element: page(<QuestionPage />), handle: { workspace: true } },
@@ -42,7 +42,7 @@ export const router = createBrowserRouter([
       { path: "profile", element: authed(<ProfilePage />) },
       { path: "login", element: page(<LoginPage />) },
       { path: "register", element: page(<RegisterPage />) },
-      { path: "about", element: page(<AboutPage />) },
+      { path: "about", element: page(<AboutPage />), handle: { marketing: true } },
       { path: "*", element: page(<NotFoundPage />) },
     ],
   },

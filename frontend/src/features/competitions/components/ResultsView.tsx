@@ -28,7 +28,7 @@ export function ResultsView({ state, myUserId }: { state: CompetitionState; myUs
   const iWon = winner?.user_id === myUserId;
 
   return (
-    <div className="results">
+    <div data-lenis-prevent className="results">
       <section className={winner ? "podium podium--won" : "podium"} aria-live="polite">
         {winner ? (
           <>

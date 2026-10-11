@@ -69,7 +69,7 @@ export function Modal({ open, title, onClose, children, footer, busy = false }: 
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
-      <div ref={panelRef} className="modal__panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={panelRef} data-lenis-prevent className="modal__panel" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <header className="modal__header">
           <h2 id={titleId} className="modal__title">
             {title}

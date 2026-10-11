@@ -12,7 +12,7 @@ interface ProblemStatementProps {
 
 export function ProblemStatement({ question, showTitle = true }: ProblemStatementProps) {
   return (
-    <article className="problem">
+    <article data-lenis-prevent className="problem">
       {showTitle && <h1 className="problem__title">{question.title}</h1>}
       <div className="problem__meta">
         <DifficultyBadge difficulty={question.difficulty} />

@@ -63,7 +63,7 @@ export function Arena({ state, question, myUserId, secondsLeft, attempts, mySubm
 
   return (
     <div className="arena">
-      <aside className="panel arena__problem">
+      <aside data-lenis-prevent className="panel arena__problem">
         <h1 className="problem__title">{question.title}</h1>
         <ProblemStatement question={question} showTitle={false} />
       </aside>
@@ -96,7 +96,7 @@ export function Arena({ state, question, myUserId, secondsLeft, attempts, mySubm
               Run output
             </button>
           </div>
-          <div className="arena__results-body" role="tabpanel">
+          <div data-lenis-prevent className="arena__results-body" role="tabpanel">
             {panel === "verdict" ? (
               mySubmission ? (
                 <SubmissionResult submission={mySubmission} />
@@ -113,7 +113,7 @@ export function Arena({ state, question, myUserId, secondsLeft, attempts, mySubm
         </div>
       </section>
 
-      <aside className="arena__rail">
+      <aside data-lenis-prevent className="arena__rail">
         <MatchTimer secondsLeft={secondsLeft} totalSeconds={state.duration_seconds} />
         <section aria-labelledby="race-heading">
           <h2 id="race-heading" className="section-title">

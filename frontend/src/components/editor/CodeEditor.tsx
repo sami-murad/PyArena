@@ -60,7 +60,7 @@ export default function CodeEditor({
   };
 
   return (
-    <div className="code-editor">
+    <div data-lenis-prevent className="code-editor">
       <Editor
         language="python"
         path={path}

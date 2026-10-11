@@ -17,7 +17,7 @@ interface RaceLanesProps {
  */
 export function RaceLanes({ participants, attempts, winner, myUserId }: RaceLanesProps) {
   return (
-    <ol className="lanes" aria-label="Players">
+    <ol data-lenis-prevent className="lanes" aria-label="Players">
       {participants.map((p) => {
         const seen = attempts[p.user_id] ?? [];
         // The server's count is authoritative; marks we did not witness live are shown as plain ticks.

@@ -11,10 +11,13 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Space for the scrollbar is always reserved, so pages do not shift sideways
+     when content grows long enough to scroll. */
+  scrollbar-gutter: stable both-edges;
 }
 
 body {
-  min-height: 100vh;
+  min-height: var(--viewport-height);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

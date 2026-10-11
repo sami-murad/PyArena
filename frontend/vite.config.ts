@@ -29,10 +29,35 @@ function siteMetadata(): Plugin {
   };
 }
 
+/**
+ * Preload the two fonts every page needs above the fold (latin subsets of the
+ * body and display faces), so text does not reflow when they arrive. The file
+ * names are hashed at build time, so the links are added from the bundle.
+ */
+const PRELOADED_FONTS = [/inter-latin-wght-normal-[\w-]+\.woff2$/, /fredoka-latin-wght-normal-[\w-]+\.woff2$/];
+
+function preloadFonts(): Plugin {
+  return {
+    name: "pyarena-preload-fonts",
+    apply: "build",
+    transformIndexHtml(html, ctx) {
+      const files = Object.keys(ctx.bundle ?? {}).filter((f) => PRELOADED_FONTS.some((re) => re.test(f)));
+      return {
+        html,
+        tags: files.map((file) => ({
+          tag: "link",
+          attrs: { rel: "preload", href: `/${file}`, as: "font", type: "font/woff2", crossorigin: "" },
+          injectTo: "head" as const,
+        })),
+      };
+    },
+  };
+}
+
 const backend = process.env.VITE_DEV_BACKEND_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
-  plugins: [react(), siteMetadata()],
+  plugins: [react(), siteMetadata(), preloadFonts()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

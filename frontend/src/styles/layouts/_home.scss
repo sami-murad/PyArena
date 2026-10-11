@@ -9,6 +9,8 @@
 }
 
 .hero {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   align-items: center;
@@ -23,10 +25,9 @@
 
   &__title {
     font-size: var(--text-display);
-    font-weight: var(--weight-heavy);
-    line-height: 1.02;
-    letter-spacing: -0.035em;
-    font-variation-settings: "opsz" 96;
+    font-weight: var(--weight-semibold);
+    line-height: 1.04;
+    letter-spacing: -0.015em;
     animation: hero-in var(--duration-slow) var(--ease-out) both;
   }
 
@@ -43,6 +44,40 @@
     flex-wrap: wrap;
     gap: var(--space-3);
     margin-block-start: var(--space-6);
+  }
+}
+
+// Decorative glows behind the hero, moved by <Parallax> (marketing pages only).
+.hero__decor {
+  position: absolute;
+  // Full viewport width (the hero itself is centred and narrower); .main clips
+  // horizontally so this never causes sideways scrolling.
+  inset: -25% calc(50% - 50vw) 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hero__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  will-change: transform;
+
+  &--a {
+    inset-block-start: 8%;
+    inset-inline-start: -6%;
+    inline-size: 340px;
+    block-size: 340px;
+    background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  }
+
+  &--b {
+    inset-block-end: 4%;
+    inset-inline-end: -4%;
+    inline-size: 420px;
+    block-size: 420px;
+    background: var(--color-accent-soft);
   }
 }
 

@@ -4,6 +4,8 @@ import { ButtonLink } from "@/components/ui/Button";
 import { routes } from "@/config/navigation";
 import { websitesInfo } from "@/config/websitesInfo";
 import { LiveSample } from "@/features/home/components/LiveSample";
+import { Parallax } from "@/features/scroll/Parallax";
+import { Reveal } from "@/features/scroll/Reveal";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function HomePage() {
@@ -11,6 +13,14 @@ export default function HomePage() {
   return (
     <div className="home">
       <section className="hero">
+        <div className="hero__decor">
+          <Parallax speed={0.18}>
+            <div className="hero__glow hero__glow--a" />
+          </Parallax>
+          <Parallax speed={-0.1}>
+            <div className="hero__glow hero__glow--b" />
+          </Parallax>
+        </div>
         <div className="hero__text">
           <h1 className="hero__title">
             Write Python here.
@@ -34,7 +44,7 @@ export default function HomePage() {
       </section>
 
       <section className="paths" aria-label="What you can do">
-        <div className="path">
+        <Reveal className="path">
           <h2 className="path__title">The playground</h2>
           <p>
             A full editor with syntax highlighting. Type input for <code>input()</code>, run, and read the output. When
@@ -45,8 +55,8 @@ export default function HomePage() {
             <li>Infinite loops and runaway output are stopped for you.</li>
             <li>Sign in to keep snippets and come back to them.</li>
           </ul>
-        </div>
-        <div className="path">
+        </Reveal>
+        <Reveal className="path" delay={120}>
           <h2 className="path__title">Live competitions</h2>
           <p>
             Open a room, send the code to friends, ready up. The server starts everyone at the same instant and checks
@@ -57,7 +67,7 @@ export default function HomePage() {
             <li>Submit as often as you like; each try is judged in the order it arrived.</li>
             <li>The first submission that passes every test wins the round.</li>
           </ol>
-        </div>
+        </Reveal>
       </section>
     </div>
   );

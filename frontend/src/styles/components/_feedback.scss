@@ -67,7 +67,7 @@
 .page-spinner {
   display: grid;
   place-items: center;
-  min-block-size: 40vh;
+  min-block-size: calc(var(--viewport-height) * 0.4);
 }
 
 @keyframes spin {

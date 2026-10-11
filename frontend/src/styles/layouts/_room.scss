@@ -187,10 +187,12 @@
   @include down($breakpoint-md) {
     grid-template-columns: 1fr;
     overflow: auto;
+    overscroll-behavior: contain;
   }
 
   &__problem {
     overflow: auto;
+    overscroll-behavior: contain;
     padding: var(--space-5);
     min-block-size: 0;
     display: grid;
@@ -223,6 +225,7 @@
   &__results-body {
     flex: 1;
     overflow: auto;
+    overscroll-behavior: contain;
     padding: var(--space-4);
   }
 
@@ -241,6 +244,7 @@
     gap: var(--space-5);
     min-block-size: 0;
     overflow: auto;
+    overscroll-behavior: contain;
     padding: var(--space-2);
   }
 }

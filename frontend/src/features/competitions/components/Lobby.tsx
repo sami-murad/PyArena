@@ -48,7 +48,7 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
           </p>
         </header>
 
-        <section className="lobby__players" aria-labelledby="players-heading">
+        <section data-lenis-prevent className="lobby__players" aria-labelledby="players-heading">
           <h2 id="players-heading" className="section-title">
             Players <span className="section-title__count">{state.participants.length} of {state.max_players}</span>
           </h2>

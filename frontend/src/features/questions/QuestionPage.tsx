@@ -76,7 +76,7 @@ export default function QuestionPage() {
 
   return (
     <div className="workspace solve">
-      <aside className="panel solve__problem">
+      <aside data-lenis-prevent className="panel solve__problem">
         <Link to={routes.questions} className="back-link">
           <ArrowLeft size={16} aria-hidden /> All questions
         </Link>
@@ -126,7 +126,7 @@ export default function QuestionPage() {
               Run output
             </button>
           </div>
-          <div className="solve__results-body" role="tabpanel">
+          <div data-lenis-prevent className="solve__results-body" role="tabpanel">
             {tab === "verdict" ? (
               submitError ? (
                 <ErrorMessage title="Submission failed" message={submitError} />

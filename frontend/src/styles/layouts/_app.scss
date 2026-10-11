@@ -2,14 +2,18 @@
 @use "../abstracts/mixins" as *;
 
 .app {
-  min-block-size: 100vh;
+  min-block-size: var(--viewport-height);
   display: flex;
   flex-direction: column;
 
   &--workspace {
-    block-size: 100vh;
+    block-size: var(--viewport-height);
     overflow: hidden;
   }
+}
+
+.app:not(.app--workspace) .main {
+  overflow-x: clip;
 }
 
 .main {

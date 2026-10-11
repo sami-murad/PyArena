@@ -10,6 +10,7 @@
 
   @include down($breakpoint-md) {
     overflow: auto;
+    overscroll-behavior: contain;
   }
 }
 
@@ -18,6 +19,7 @@
 
   @include down($breakpoint-md) {
     overflow: auto;
+    overscroll-behavior: contain;
   }
 }
 
@@ -141,6 +143,7 @@
 
   &__problem {
     overflow: auto;
+    overscroll-behavior: contain;
     padding: var(--space-5);
     min-block-size: 0;
   }
@@ -170,6 +173,7 @@
   &__results-body {
     flex: 1;
     overflow: auto;
+    overscroll-behavior: contain;
     padding: var(--space-4);
 
     .console {

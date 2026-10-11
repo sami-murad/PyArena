@@ -6,9 +6,11 @@
  */
 :root {
   /* Typography */
-  --font-display: "Bricolage Grotesque Variable", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Instrument Sans Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Fredoka Variable", "Nunito", "Avenir Next Rounded", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-code: "JetBrains Mono Variable", "Cascadia Code", "Fira Code", ui-monospace, Menlo, Consolas, monospace;
+  /* Only for the mascot's speech bubbles, never for body text. */
+  --font-mascot: "Comic Neue", "Comic Sans MS", "Chalkboard SE", cursive;
 
   /* Major-third scale (x1.25) */
   --text-xs: 0.8rem;
@@ -48,6 +50,9 @@
   --radius-lg: 16px;
   --radius-pill: 999px;
 
+  /* Viewport: dvh follows mobile browser toolbars; vh is the fallback. */
+  --viewport-height: 100vh;
+
   /* Layout */
   --header-height: 60px;
   --content-width: 1180px;
@@ -67,6 +72,12 @@
   --z-tooltip: 130;
 
   --focus-ring-width: 3px;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-height: 100dvh;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

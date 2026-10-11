@@ -11,11 +11,14 @@ export default function AboutPage() {
       <h2>How your code runs</h2>
       <p>
         Code never runs in your browser or in the web server. The API forwards it to a separate judge worker that starts
-        a fresh Python process for every run, with limits on time, memory, processes, output and file size, and no
-        access to secrets. Competition answers are checked on the server; hidden tests never leave it.
+        a fresh Python process for every run, with limits on time, memory, processes, output and file size, a filter
+        that refuses dangerous system calls, no network access and no access to secrets. Competition answers are checked on the server; hidden tests never leave it.
       </p>
       <h2>Built with</h2>
-      <p>React, TypeScript, Vite and Monaco on the front end; FastAPI, SQLAlchemy, PostgreSQL and Socket.IO on the back end.</p>
+      <p>
+        React, TypeScript, Vite and Monaco on the front end; FastAPI, SQLAlchemy, PostgreSQL, Redis and Socket.IO on the
+        back end. Fonts: Fredoka, Inter, JetBrains Mono and Comic Neue, all under the SIL Open Font License.
+      </p>
       {(hasContactEmail || visibleSocialLinks.length > 0) && (
         <>
           <h2>Contact</h2>
