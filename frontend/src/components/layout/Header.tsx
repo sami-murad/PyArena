@@ -1,4 +1,4 @@
-import { LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
+import { LogIn, LogOut, Menu, Moon, Smile, Sun, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -7,14 +7,19 @@ import { Logo } from "@/components/layout/Logo";
 import { useToast } from "@/components/feedback/Toast";
 import { ButtonLink } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { activeMascot } from "@/config/mascots";
 import { primaryNavigation, routes } from "@/config/navigation";
 import { useAuth } from "@/features/auth/AuthContext";
+import { useMascot } from "@/features/mascot/MascotContext";
+import { useSound } from "@/features/sound/useSound";
 import { cx } from "@/utils/cx";
 
 export function Header() {
   const { theme, toggleTheme } = useTheme();
   const { user, checking, logout } = useAuth();
   const { notify } = useToast();
+  const { muted, toggleMuted } = useSound();
+  const { visible: mascotVisible, setVisible: setMascotVisible } = useMascot();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,6 +51,9 @@ export function Header() {
 
   const items = primaryNavigation.filter((item) => !item.requiresAuth || user);
   const themeLabel = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
+  const soundLabel = muted ? "Turn sounds on" : "Mute sounds";
+  const mascotName = activeMascot().name;
+  const mascotLabel = mascotVisible ? `Hide ${mascotName}, the mascot` : `Show ${mascotName}, the mascot`;
 
   async function handleLogout() {
     await logout();
@@ -66,6 +74,29 @@ export function Header() {
           ))}
         </nav>
         <div className="header__actions">
+          <Tooltip content={mascotLabel}>
+            <button
+              type="button"
+              className={cx("icon-btn", !mascotVisible && "icon-btn--off")}
+              onClick={() => setMascotVisible(!mascotVisible)}
+              aria-label={mascotLabel}
+              aria-pressed={mascotVisible}
+            >
+              <Smile size={18} aria-hidden />
+            </button>
+          </Tooltip>
+          <Tooltip content={soundLabel}>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={toggleMuted}
+              aria-label={soundLabel}
+              aria-pressed={!muted}
+              data-testid="sound-toggle"
+            >
+              {muted ? <VolumeX size={18} aria-hidden /> : <Volume2 size={18} aria-hidden />}
+            </button>
+          </Tooltip>
           <Tooltip content={themeLabel}>
             <button type="button" className="icon-btn" onClick={toggleTheme} aria-label={themeLabel}>
               {theme === "dark" ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}

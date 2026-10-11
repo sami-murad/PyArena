@@ -14,6 +14,7 @@ import { useCodeRunner } from "@/features/playground/hooks/useCodeRunner";
 import { ProblemStatement } from "@/features/questions/components/ProblemStatement";
 import { SubmissionResult } from "@/features/questions/components/SubmissionResult";
 import { questionService } from "@/features/questions/services/questionService";
+import { emitReaction } from "@/features/reactions/reactionBus";
 import { useAsync } from "@/hooks/useAsync";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
@@ -58,11 +59,15 @@ export default function QuestionPage() {
       id: 0, question_id: question.id, competition_id: null, status: "PENDING", passed_count: 0,
       total_count: question.total_tests, feedback: null, created_at: new Date().toISOString(), judged_at: null, code,
     });
+    emitReaction({ type: "submit:started" });
     try {
-      setSubmission(await questionService.submit(question.id, code));
+      const judged = await questionService.submit(question.id, code);
+      setSubmission(judged);
+      emitReaction({ type: "submit:finished", status: judged.status, passed: judged.passed_count, total: judged.total_count });
     } catch (err) {
       setSubmission(null);
       setSubmitError(errorMessage(err));
+      emitReaction({ type: "submit:failed" });
     } finally {
       setSubmitting(false);
     }

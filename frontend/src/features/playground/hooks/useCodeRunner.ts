@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { runCode } from "@/features/playground/services/executionService";
+import { emitReaction } from "@/features/reactions/reactionBus";
 import { errorMessage } from "@/services/apiClient";
 import type { ExecuteResponse } from "@/types/api";
 
@@ -33,16 +34,19 @@ export function useCodeRunner(): CodeRunner {
     controller.current = current;
     setPhase("running");
     setError(null);
+    emitReaction({ type: "run:started" });
     try {
       const response = await runCode(code, stdin, current.signal);
       if (current.signal.aborted) return;
       setResult(response);
       setPhase("done");
+      emitReaction({ type: "run:finished", status: response.status });
     } catch (err) {
       if (current.signal.aborted) return;
       setResult(null);
       setError(errorMessage(err));
       setPhase("failed");
+      emitReaction({ type: "run:failed" });
     }
   }, []);
 
@@ -51,6 +55,7 @@ export function useCodeRunner(): CodeRunner {
       controller.current.abort();
       controller.current = null;
       setPhase("stopped");
+      emitReaction({ type: "run:stopped" });
     }
   }, []);
 

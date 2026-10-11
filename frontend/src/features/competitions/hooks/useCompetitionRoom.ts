@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { competitionService } from "@/features/competitions/services/competitionService";
+import { emitReaction } from "@/features/reactions/reactionBus";
 import { errorMessage } from "@/services/apiClient";
 import { getSocket } from "@/services/socketClient";
 import type { CompetitionState, Submission, SubmissionStatus, Winner } from "@/types/api";
@@ -106,9 +107,14 @@ export function useCompetitionRoom(competitionId: number, myUserId: number | und
     const onDisconnect = () => setConnection("reconnecting");
     const onConnectError = () => setConnection(socket.active ? "reconnecting" : "offline");
     const onState = (payload: CompetitionState) => applyState(payload);
-    const onCountdown = () => log("The host started the competition.", "primary");
+    const onCountdown = () => {
+      log("The host started the competition.", "primary");
+      emitReaction({ type: "competition:countdown" });
+    };
     const onStarted = (p: StartedPayload) => {
-      if (p.competition_id === competitionId) log("Go! The question is live.", "primary");
+      if (p.competition_id !== competitionId) return;
+      log("Go! The question is live.", "primary");
+      emitReaction({ type: "competition:started" });
     };
     const onReceived = (p: SubmissionReceivedPayload) => {
       if (p.competition_id !== competitionId) return;
@@ -131,11 +137,15 @@ export function useCompetitionRoom(competitionId: number, myUserId: number | und
       if (p.submission_id === mySubmissionId.current) {
         competitionService.submission(p.submission_id).then(setMySubmission).catch(() => undefined);
       }
+      if (uid === myUserId) {
+        emitReaction({ type: "competition:verdict", status: p.status, passed: p.passed_count, total: p.total_count });
+      }
     };
     const onWinner = (p: WinnerPayload) => {
       if (p.competition_id === competitionId && p.winner) {
         const w: Winner = p.winner;
         log(`${w.username} solved it first!`, "success");
+        emitReaction(w.user_id === myUserId ? { type: "competition:won" } : { type: "competition:lost", winner: w.username });
       }
     };
     const onFinished = (p: FinishedPayload) => {
@@ -148,6 +158,7 @@ export function useCompetitionRoom(competitionId: number, myUserId: number | und
         idle: "The lobby expired after a long wait.",
       };
       log(reasons[p.reason] ?? "The competition ended.", "neutral");
+      if (p.reason === "time_up") emitReaction({ type: "competition:time-up" });
     };
     const onRoomError = (p: { message: string }) => log(p.message, "danger");
 
