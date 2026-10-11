@@ -1,0 +1,16 @@
+// Emits the theme maps as CSS custom properties (--color-*).
+// Dark is the default; <html data-theme="light"> switches at runtime.
+@use "../abstracts/mixins" as *;
+@use "dark" as *;
+@use "light" as *;
+
+:root,
+[data-theme="dark"] {
+  @include emit-theme($theme-dark);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  @include emit-theme($theme-light);
+  color-scheme: light;
+}

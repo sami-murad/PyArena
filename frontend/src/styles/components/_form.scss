@@ -1,0 +1,120 @@
+.field {
+  display: grid;
+  gap: var(--space-2);
+  border: 0;
+  padding: 0;
+  min-inline-size: 0;
+
+  &__label {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+    padding: 0;
+  }
+
+  &__hint {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  &__error {
+    font-size: var(--text-sm);
+    color: var(--color-danger);
+  }
+
+  &--code .input {
+    font-family: var(--font-code);
+    font-size: var(--text-lg);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+}
+
+.input {
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  transition: border-color var(--duration-fast);
+
+  &::placeholder {
+    color: var(--color-subtle);
+  }
+
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  &:focus-visible {
+    outline-offset: 0;
+    border-color: var(--color-focus);
+  }
+
+  &[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+
+  &--textarea {
+    font-family: var(--font-code);
+    font-size: var(--text-sm);
+    resize: vertical;
+  }
+
+  &--select {
+    appearance: none;
+    padding-inline-end: var(--space-6);
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--color-muted) 50%),
+      linear-gradient(135deg, var(--color-muted) 50%, transparent 50%);
+    background-position:
+      calc(100% - 18px) 50%,
+      calc(100% - 13px) 50%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+  }
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-4);
+}
+
+.form-error {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+
+  &__item {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--color-muted);
+
+    &:hover {
+      color: var(--color-text);
+    }
+
+    &--active {
+      background: var(--color-surface-raised);
+      color: var(--color-text);
+      box-shadow: 0 1px 2px var(--color-shadow);
+    }
+  }
+}

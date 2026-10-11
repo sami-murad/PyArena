@@ -1,0 +1,37 @@
+// Dark theme (default): deep ink-blue workspace with Python-yellow actions.
+// Every colour in the UI comes from these maps. Do not hardcode colours elsewhere.
+$theme-dark: (
+  "background": #0e1626,
+  "surface": #142035,
+  "surface-raised": #1b2a45,
+  "surface-sunken": #0a111e,
+  "border": #263655,
+  "border-strong": #3a4d73,
+  "text": #e8edf6,
+  "muted": #94a2bd,
+  "subtle": #6a7a99,
+
+  "primary": #ffd43b,
+  "primary-hover": #ffe172,
+  "primary-text": #ffd43b,
+  "on-primary": #1b1503,
+
+  "accent": #7fb2e5,
+  "accent-soft": rgba(127, 178, 229, 0.14),
+
+  "success": #4cc790,
+  "success-soft": rgba(76, 199, 144, 0.14),
+  "danger": #f37a82,
+  "danger-soft": rgba(243, 122, 130, 0.14),
+  "warning": #f5a85a,
+  "warning-soft": rgba(245, 168, 90, 0.14),
+
+  "focus": #7fb2e5,
+  "overlay": rgba(4, 8, 16, 0.72),
+  "shadow": rgba(0, 0, 0, 0.45),
+  "selection": rgba(255, 212, 59, 0.28),
+
+  "editor-background": #0b1322,
+  "editor-line": #142035,
+  "editor-gutter": #4d5f82,
+);

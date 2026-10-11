@@ -1,0 +1,64 @@
+"""Database engine, session factory and declarative base."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+
+from sqlalchemy import DateTime, MetaData, TypeDecorator
+from sqlalchemy.engine import Dialect
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
+class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """Timezone-aware UTC timestamps on every database (SQLite drops tzinfo)."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class Database:
+    def __init__(self, url: str, echo: bool = False) -> None:
+        kwargs: dict[str, object] = {"echo": echo}
+        if not url.startswith("sqlite"):
+            kwargs.update(pool_pre_ping=True, pool_size=10, max_overflow=10)
+        self.engine: AsyncEngine = create_async_engine(url, **kwargs)
+        self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
+
+    async def session(self) -> AsyncIterator[AsyncSession]:
+        async with self.sessionmaker() as session:
+            yield session
+
+    async def dispose(self) -> None:
+        await self.engine.dispose()

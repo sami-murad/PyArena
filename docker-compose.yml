@@ -1,0 +1,90 @@
+# PyArena full stack:  docker compose up --build   ->  http://localhost:8080
+#
+# Networks are the trust boundaries:
+#   web    nginx <-> API (only nginx publishes a port)
+#   data   API <-> PostgreSQL (the worker is NOT on this network)
+#   judge  API <-> judge worker; "internal" = no route to the internet
+#
+# Copy .env.example to .env and set real secrets before running.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pyarena}
+      POSTGRES_USER: ${POSTGRES_USER:-pyarena}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build: ./judge-worker
+    # tini as PID 1 reaps killed job processes promptly.
+    init: true
+    restart: unless-stopped
+    environment:
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
+      WORKER_MAX_CONCURRENT_JOBS: ${WORKER_MAX_CONCURRENT_JOBS:-4}
+    networks: [judge]
+    read_only: true
+    tmpfs:
+      - /sandbox:size=64m,mode=1777
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    # Minimum needed to run each job as its own UID, clean up its files and kill its processes.
+    cap_add: [SETUID, SETGID, KILL, CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 2
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pyarena}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pyarena}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      WORKER_URL: http://worker:8001
+      WORKER_TOKEN: ${WORKER_TOKEN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8080}
+      TRUST_PROXY_HEADERS: "true"
+      COMPETITION_MIN_PLAYERS: ${COMPETITION_MIN_PLAYERS:-2}
+    networks: [web, data, judge]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SITE_URL: ${PUBLIC_URL:-http://localhost:8080}
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    networks: [web]
+
+networks:
+  web:
+  data:
+    internal: true
+  judge:
+    internal: true
+
+volumes:
+  pgdata:

@@ -1,0 +1,36 @@
+// Light theme: paper-white surfaces, ink text, the same yellow for actions.
+$theme-light: (
+  "background": #f4f6fa,
+  "surface": #ffffff,
+  "surface-raised": #edf1f7,
+  "surface-sunken": #e6ebf3,
+  "border": #d5dce8,
+  "border-strong": #b3bfd3,
+  "text": #13213a,
+  "muted": #55627c,
+  "subtle": #7a869c,
+
+  "primary": #ffd43b,
+  "primary-hover": #f5c518,
+  "primary-text": #8a6400,
+  "on-primary": #1b1503,
+
+  "accent": #2a64a8,
+  "accent-soft": rgba(42, 100, 168, 0.1),
+
+  "success": #157a4c,
+  "success-soft": rgba(21, 122, 76, 0.1),
+  "danger": #c23b45,
+  "danger-soft": rgba(194, 59, 69, 0.09),
+  "warning": #a55a00,
+  "warning-soft": rgba(165, 90, 0, 0.1),
+
+  "focus": #2a64a8,
+  "overlay": rgba(19, 33, 58, 0.45),
+  "shadow": rgba(19, 33, 58, 0.12),
+  "selection": rgba(255, 212, 59, 0.45),
+
+  "editor-background": #ffffff,
+  "editor-line": #f2f5fa,
+  "editor-gutter": #9aa6bb,
+);

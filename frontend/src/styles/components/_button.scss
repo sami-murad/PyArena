@@ -1,0 +1,115 @@
+.btn {
+  --btn-bg: var(--color-surface-raised);
+  --btn-fg: var(--color-text);
+  --btn-border: var(--color-border);
+  --btn-hover: var(--color-border);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+
+  svg {
+    flex: none;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--btn-hover);
+    text-decoration: none;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    --btn-bg: var(--color-primary);
+    --btn-fg: var(--color-on-primary);
+    --btn-border: var(--color-primary);
+    --btn-hover: var(--color-primary-hover);
+  }
+
+  &--ghost {
+    --btn-bg: transparent;
+    --btn-border: transparent;
+    --btn-hover: var(--color-surface-raised);
+    --btn-fg: var(--color-muted);
+
+    &:hover:not(:disabled) {
+      color: var(--color-text);
+    }
+  }
+
+  &--danger {
+    --btn-bg: var(--color-danger-soft);
+    --btn-fg: var(--color-danger);
+    --btn-border: transparent;
+    --btn-hover: var(--color-danger-soft);
+
+    &:hover:not(:disabled) {
+      border-color: var(--color-danger);
+    }
+  }
+
+  &--sm {
+    min-block-size: 32px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-sm);
+  }
+
+  &--lg {
+    min-block-size: 48px;
+    padding: 0 var(--space-5);
+    font-size: var(--text-md);
+  }
+
+  &--block {
+    inline-size: 100%;
+  }
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 36px;
+  block-size: 36px;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
+
+  &:hover:not(:disabled) {
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+  }
+
+  &--danger:hover:not(:disabled) {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}

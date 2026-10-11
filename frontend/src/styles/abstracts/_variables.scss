@@ -1,0 +1,31 @@
+// Build-time Sass values.
+//
+// Colours are NOT defined here: Sass aliases point at the runtime CSS custom
+// properties so a theme switch updates everything. Change colour values in
+// styles/themes/, never here.
+
+// Breakpoints (Sass only: media queries cannot use CSS variables).
+$breakpoint-sm: 600px;
+$breakpoint-md: 900px;
+$breakpoint-lg: 1200px;
+
+// Colour aliases (runtime themed)
+$color-background: var(--color-background);
+$color-surface: var(--color-surface);
+$color-primary: var(--color-primary);
+$color-primary-hover: var(--color-primary-hover);
+$color-on-primary: var(--color-on-primary);
+$color-text: var(--color-text);
+$color-muted: var(--color-muted);
+$color-border: var(--color-border);
+$color-success: var(--color-success);
+$color-danger: var(--color-danger);
+$color-warning: var(--color-warning);
+
+// Spacing and radii aliases (defined in tokens.css)
+$spacing-sm: var(--space-2);
+$spacing-md: var(--space-4);
+$spacing-lg: var(--space-6);
+$radius-sm: var(--radius-sm);
+$radius-md: var(--radius-md);
+$radius-lg: var(--radius-lg);

@@ -1,0 +1,46 @@
+.room-list {
+  display: grid;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+
+  li + li {
+    border-block-start: 1px solid var(--color-border);
+  }
+}
+
+.room-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--color-surface-raised);
+  }
+
+  &__code {
+    font-family: var(--font-code);
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.08em;
+  }
+
+  &__meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  &__time {
+    margin-inline-start: auto;
+    font-size: var(--text-sm);
+    color: var(--color-subtle);
+  }
+
+  &__chevron {
+    color: var(--color-subtle);
+  }
+}

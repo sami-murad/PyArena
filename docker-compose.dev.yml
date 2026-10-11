@@ -1,0 +1,46 @@
+# Development services only: PostgreSQL and the judge worker in Docker, while
+# you run the backend (venv) and frontend (npm run dev) on your machine.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Both ports bind to 127.0.0.1 only. The worker here can reach your machine's
+# network, so this file is for local development, never for a server.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pyarena
+      POSTGRES_USER: pyarena
+      POSTGRES_PASSWORD: pyarena
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pyarena -d pyarena"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build: ./judge-worker
+    # tini as PID 1 reaps killed job processes promptly.
+    init: true
+    environment:
+      WORKER_TOKEN: dev-only-worker-token
+    ports:
+      - "127.0.0.1:8001:8001"
+    read_only: true
+    tmpfs:
+      - /sandbox:size=64m,mode=1777
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, KILL, CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+
+volumes:
+  pgdata-dev:
