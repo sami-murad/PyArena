@@ -36,7 +36,7 @@ export function SubmissionResult({ submission }: { submission: Submission }) {
       {fb.message && <p className="verdict__message">{fb.message}</p>}
       {fb.is_public && (fb.input || fb.expected) && (
         <dl className="verdict__details">
-          {fb.input !== undefined && (
+          {typeof fb.input === "string" && (
             <>
               <dt>Input</dt>
               <dd>
@@ -44,7 +44,7 @@ export function SubmissionResult({ submission }: { submission: Submission }) {
               </dd>
             </>
           )}
-          {fb.expected !== undefined && (
+          {typeof fb.expected === "string" && (
             <>
               <dt>Expected</dt>
               <dd>
@@ -52,7 +52,7 @@ export function SubmissionResult({ submission }: { submission: Submission }) {
               </dd>
             </>
           )}
-          {fb.actual !== undefined && (
+          {typeof fb.actual === "string" && (
             <>
               <dt>Your result</dt>
               <dd>

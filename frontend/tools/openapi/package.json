@@ -1,0 +1,12 @@
+{
+  "name": "pyarena-openapi-tools",
+  "private": true,
+  "description": "Isolated generator for src/types/openapi.d.ts. openapi-typescript needs TypeScript 5, the app uses 6, so it lives in its own folder with its own lockfile.",
+  "scripts": {
+    "generate": "openapi-typescript ../../openapi.json --output ../../src/types/openapi.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  }
+}

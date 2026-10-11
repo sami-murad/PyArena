@@ -90,17 +90,18 @@ export type SubmissionStatus =
   | "SYSTEM_ERROR"
   | "CANCELLED";
 
+/** Empty fields are null (hidden tests never fill input, expected, actual, stdout or stderr). */
 export interface SubmissionFeedback {
-  message?: string;
-  failed_test?: number;
-  total_tests?: number;
-  is_public?: boolean;
+  message?: string | null;
+  failed_test?: number | null;
+  total_tests?: number | null;
+  is_public?: boolean | null;
   error_type?: string | null;
-  input?: string;
-  expected?: string;
-  actual?: string;
-  stdout?: string;
-  stderr?: string;
+  input?: string | null;
+  expected?: string | null;
+  actual?: string | null;
+  stdout?: string | null;
+  stderr?: string | null;
 }
 
 export interface Submission {

@@ -1,0 +1,12 @@
+# Trivy exceptions. Each one names the finding, the file and the reason.
+misconfigurations:
+  - id: DS-0002
+    paths:
+      - "judge-worker/Dockerfile"
+    statement: >-
+      The judge worker starts as root inside its container on purpose: it gives
+      every job its own unprivileged UID and kills everything that UID started.
+      docker-compose.yml drops all capabilities except SETUID, SETGID, KILL,
+      CHOWN, DAC_OVERRIDE and FOWNER, sets no-new-privileges and a read-only root
+      filesystem, and keeps the container off the internet. User code never runs
+      as root. See docs/SECURITY.md and docs/adr/0004-sandbox-defence-layers.md.

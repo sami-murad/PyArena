@@ -11,7 +11,11 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:visual": "playwright test e2e/visual.spec.ts",
+    "test:visual:update": "playwright test e2e/visual.spec.ts --update-snapshots",
+    "api:types": "npm --prefix tools/openapi ci --no-audit --no-fund && npm --prefix tools/openapi run generate",
+    "stickers": "node scripts/build-stickers.mjs"
   },
   "dependencies": {
     "@fontsource-variable/fredoka": "^5.3.0",
@@ -28,6 +32,7 @@
     "socket.io-client": "^4.8.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.56.0",
     "@testing-library/jest-dom": "^7.0.1",

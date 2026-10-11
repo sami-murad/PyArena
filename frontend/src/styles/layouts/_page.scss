@@ -99,3 +99,10 @@
     align-self: flex-start;
   }
 }
+
+.route-error__detail {
+  margin-block-start: var(--space-4);
+  max-block-size: 40vh;
+  overflow: auto;
+  font-size: var(--text-xs);
+}

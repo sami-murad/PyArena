@@ -34,7 +34,11 @@ QUESTIONS: list[dict[str, Any]] = [
         ),
         "input_spec": "`nums`: list of integers. `target`: integer.",
         "output_spec": "A list of two indices `[i, j]` with `i < j`.",
-        "constraints": ["2 <= len(nums) <= 10^4", "-10^9 <= nums[i], target <= 10^9", "Exactly one answer exists"],
+        "constraints": [
+            "2 <= len(nums) <= 10^4",
+            "-10^9 <= nums[i], target <= 10^9",
+            "Exactly one answer exists",
+        ],
         "starter_code": "def pair_to_target(nums, target):\n    # Return [i, j] with i < j and nums[i] + nums[j] == target\n    pass\n",
         "explanation": "Walk the list once and remember each value's index in a dictionary. For each number, check whether `target - number` has already been seen. This runs in O(n) time.",
         "reference": """
@@ -136,7 +140,11 @@ def second_largest(nums):
     return values[-2] if len(values) >= 2 else None
 """,
         "tests": [
-            {"input": [[4, 9, 2, 9, 7]], "public": True, "note": "9 appears twice, so the answer is 7"},
+            {
+                "input": [[4, 9, 2, 9, 7]],
+                "public": True,
+                "note": "9 appears twice, so the answer is 7",
+            },
             {"input": [[5, 5, 5]], "public": True},
             {"input": [[]]},
             {"input": [[-1, -5]]},
@@ -199,7 +207,10 @@ def is_balanced(text):
         ),
         "input_spec": "`text`: a string of letters.",
         "output_spec": "The encoded string.",
-        "constraints": ["0 <= len(text) <= 10^5", "Upper and lower case letters are different characters"],
+        "constraints": [
+            "0 <= len(text) <= 10^5",
+            "Upper and lower case letters are different characters",
+        ],
         "starter_code": "def encode(text):\n    pass\n",
         "explanation": "Scan the string while counting the current run. When the character changes, append the character and, if the run is longer than 1, its length.",
         "reference": """
@@ -253,7 +264,11 @@ def merge_ranges(ranges):
 """,
         "tests": [
             {"input": [[[8, 10], [1, 3], [2, 6]]], "public": True},
-            {"input": [[[1, 3], [3, 5]]], "public": True, "note": "Touching ranges merge"},
+            {
+                "input": [[[1, 3], [3, 5]]],
+                "public": True,
+                "note": "Touching ranges merge",
+            },
             {"input": [[]]},
             {"input": [[[5, 5]]]},
             {"input": [[[1, 10], [2, 3], [4, 5]]]},
@@ -290,7 +305,11 @@ for word, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:k]:
 """,
         "tests": [
             {"input": "2\nthe cat and the hat\nand the bat\n", "public": True},
-            {"input": "3\nBig big BIG deal.\n", "public": True, "note": "Case is ignored; fewer than k words"},
+            {
+                "input": "3\nBig big BIG deal.\n",
+                "public": True,
+                "note": "Case is ignored; fewer than k words",
+            },
             {"input": "5\n"},
             {"input": "1\nx-ray x ray\n"},
             {"input": "2\nb a c b a c\n"},
@@ -356,7 +375,10 @@ def spiral(matrix):
         ),
         "input_spec": "`text`: any string.",
         "output_spec": "An integer.",
-        "constraints": ["0 <= len(text) <= 2 * 10^5", "An O(n^2) solution will time out on the largest tests"],
+        "constraints": [
+            "0 <= len(text) <= 2 * 10^5",
+            "An O(n^2) solution will time out on the largest tests",
+        ],
         "starter_code": "def longest_unique(text):\n    pass\n",
         "explanation": "Slide a window over the string and remember the last index of each character. When a character repeats inside the window, move the window start just past its previous position.",
         "reference": """
@@ -414,13 +436,21 @@ def count_routes(grid):
     return row[-1] % MOD
 """,
         "tests": [
-            {"input": [["...", ".#.", "..."]], "public": True, "note": "Two routes go around the wall"},
+            {
+                "input": [["...", ".#.", "..."]],
+                "public": True,
+                "note": "Two routes go around the wall",
+            },
             {"input": [["#.", ".."]], "public": True},
             {"input": [["."]]},
             {"input": [["..", ".#"]]},
             {"input": [["....", "...."]]},
             {"input": [["." * 500 for _ in range(500)]]},
-            {"input": [[("." * 499 + "#") if r == 250 else "." * 500 for r in range(500)]]},
+            {
+                "input": [
+                    [("." * 499 + "#") if r == 250 else "." * 500 for r in range(500)]
+                ]
+            },
         ],
     },
 ]
@@ -475,5 +505,8 @@ def build() -> list[dict[str, Any]]:
 
 if __name__ == "__main__":
     target = Path(__file__).with_name("questions.json")
-    target.write_text(json.dumps(build(), ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    target.write_text(
+        json.dumps(build(), ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
     print(f"Wrote {len(QUESTIONS)} questions to {target}")

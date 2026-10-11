@@ -1,0 +1,13 @@
+# gitleaks configuration: the default rules plus one documented allowance.
+title = "PyArena gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public development placeholders that production refuses to start with"
+# "dev-only-worker-token" is the documented local-development worker token
+# (docker-compose.dev.yml, backend/.env.example). Settings._production_checks
+# rejects it whenever ENVIRONMENT=production, so it can never protect a real
+# deployment. Real tokens come from the environment and are never committed.
+regexes = ['''dev-only-worker-token''']

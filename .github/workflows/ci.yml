@@ -1,0 +1,369 @@
+# PyArena CI: lint, type-check, unit and integration tests for the backend,
+# judge worker and frontend; migrations on PostgreSQL and SQLite; the OpenAPI
+# contract; end-to-end, accessibility and visual tests; Docker images; and
+# security scans (gitleaks, pip-audit, npm audit, Trivy).
+#
+# Every third-party action is pinned to a full commit SHA (with its version in
+# a comment). Tags can be moved: in March 2026 most trivy-action tags were
+# force-pushed to a credential stealer (GHSA-69fq-xp46-6x23). Update pins
+# deliberately, after the release has been out for a while.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      update_visual_baselines:
+        description: "Regenerate the visual-regression screenshots and upload them as an artifact"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "22"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  backend:
+    name: Backend · lint, types, unit tests (SQLite)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - run: python -m mypy app
+      - name: Tests (SQLite, in-memory Redis stand-ins, real sandbox)
+        run: python -m pytest -q
+
+  backend-integration:
+    name: Backend · PostgreSQL + Redis, migrations, two replicas
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pyarena
+          POSTGRES_PASSWORD: pyarena
+          POSTGRES_DB: pyarena_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyarena" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://pyarena:pyarena@localhost:5432/pyarena_test
+      REDIS_TEST_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - name: Tests on PostgreSQL and Redis (includes test_migrations and test_multi_replica)
+        run: python -m pytest -q -rs
+      - name: Migrations round-trip on SQLite
+        run: python -m pytest -q tests/test_migrations.py
+        env:
+          TEST_DATABASE_URL: ""
+
+  worker:
+    name: Judge worker · lint, sandbox tests, isolation as root, fuzz
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: judge-worker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: judge-worker/requirements*.txt
+      - run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements-dev.txt
+      - run: .venv/bin/ruff check .
+      - run: .venv/bin/ruff format --check .
+      - name: Sandbox tests (unprivileged; root-only isolation tests skip)
+        run: .venv/bin/python -m pytest -q -rs
+      - name: Isolation tests as root (per-job UIDs, process kill, seccomp)
+        run: sudo -E .venv/bin/python -m pytest -q -rs tests/test_isolation.py tests/test_seccomp.py tests/test_cgroups.py tests/test_smoke.py
+      - name: Fuzz the sandbox parsers (bounded)
+        run: |
+          .venv/bin/pip install -r requirements-fuzz.txt
+          .venv/bin/python fuzz/fuzz_sandbox.py -atheris_runs=100000
+
+  frontend:
+    name: Frontend · types, lint, unit tests, build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  contract:
+    name: Contract · OpenAPI schema and generated TS types are current
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: python -m pip install -e "backend[dev]"
+      - name: Export the OpenAPI schema from the code
+        working-directory: backend
+        run: python -m app.export_openapi
+      - name: Generate TypeScript types from it
+        working-directory: frontend
+        run: npm run api:types
+      - name: Fail if either is out of date
+        run: |
+          if ! git diff --exit-code -- frontend/openapi.json frontend/src/types/openapi.d.ts; then
+            echo "::error::The API changed. Run 'make contract' and commit frontend/openapi.json and frontend/src/types/openapi.d.ts."
+            exit 1
+          fi
+      # The type-level comparisons in frontend/tests/contract.test.ts run in the
+      # frontend job's typecheck step.
+
+  e2e:
+    name: End to end · Playwright, accessibility, visual
+    runs-on: ubuntu-24.04
+    needs: [backend, worker, frontend]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pyarena
+          POSTGRES_PASSWORD: pyarena
+          POSTGRES_DB: pyarena
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pyarena" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://pyarena:pyarena@localhost:5432/pyarena
+      REDIS_URL: redis://localhost:6379/0
+      WORKER_TOKEN: ci-worker-token-not-secret
+      LOG_FORMAT: text
+      COMPETITION_COUNTDOWN_SECONDS: "3"
+      SUBMISSION_COOLDOWN_SECONDS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            backend/pyproject.toml
+            judge-worker/requirements*.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: |
+          python -m venv backend/.venv && backend/.venv/bin/pip install -e "backend[dev]"
+          python -m venv judge-worker/.venv && judge-worker/.venv/bin/pip install -r judge-worker/requirements.txt
+          npm --prefix frontend ci
+          (cd frontend && npx playwright install --with-deps chromium)
+      - name: Start the judge worker (as root, so every job gets its own UID)
+        working-directory: judge-worker
+        run: |
+          sudo -E nohup .venv/bin/uvicorn runner:app --host 127.0.0.1 --port 8001 > /tmp/worker.log 2>&1 &
+      - name: Migrate, seed and start the API
+        working-directory: backend
+        run: |
+          .venv/bin/alembic upgrade head
+          .venv/bin/python -m app.seed
+          nohup .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/backend.log 2>&1 &
+      - name: Start the frontend dev server
+        working-directory: frontend
+        run: nohup npx vite --host 127.0.0.1 --port 5173 > /tmp/vite.log 2>&1 &
+      - name: Wait until everything is ready
+        run: |
+          for url in http://127.0.0.1:8001/health http://127.0.0.1:8000/api/v1/health/ready http://127.0.0.1:5173/; do
+            for i in $(seq 1 60); do curl -fsS "$url" > /dev/null && break; sleep 1; done
+            curl -fsS "$url" > /dev/null || { echo "::error::$url is not up"; exit 1; }
+          done
+      - name: Functional, mascot, scroll, Focus Mode and accessibility specs
+        working-directory: frontend
+        run: npx playwright test --grep-invert "looks the same"
+      - name: Visual regression (advisory until baselines are generated on CI)
+        if: ${{ !inputs.update_visual_baselines }}
+        continue-on-error: true
+        working-directory: frontend
+        run: npm run test:visual
+      - name: Regenerate visual baselines
+        if: ${{ inputs.update_visual_baselines }}
+        working-directory: frontend
+        run: npm run test:visual:update
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ inputs.update_visual_baselines }}
+        with:
+          name: visual-baselines
+          path: frontend/e2e/visual.spec.ts-snapshots/
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ failure() || cancelled() }}
+        with:
+          name: e2e-debug
+          path: |
+            frontend/test-results/
+            /tmp/worker.log
+            /tmp/backend.log
+            /tmp/vite.log
+          retention-days: 7
+
+  docker:
+    name: Docker · build images, scan with Trivy, push (optional)
+    runs-on: ubuntu-24.04
+    needs: [backend, worker, frontend]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: .
+            file: backend/Dockerfile
+          - name: worker
+            context: judge-worker
+            file: judge-worker/Dockerfile
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile
+    env:
+      # Pushing is opt-in: set the repository variable PUBLISH_IMAGES=true.
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PUBLISH_IMAGES == 'true' }}
+      IMAGE: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          load: true
+          tags: ${{ env.IMAGE }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Scan the image (fail on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:ci
+          version: v0.69.3
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+      - if: ${{ env.PUSH == 'true' }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: ${{ env.PUSH == 'true' }}
+        name: Push
+        run: |
+          docker tag "$IMAGE:ci" "$IMAGE:${GITHUB_SHA::12}"
+          docker tag "$IMAGE:ci" "$IMAGE:latest"
+          docker push "$IMAGE:${GITHUB_SHA::12}"
+          docker push "$IMAGE:latest"
+
+  security:
+    name: Security · gitleaks, pip-audit, npm audit, Trivy (repo)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: gitleaks (secrets in the whole git history)
+        env:
+          GITLEAKS_VERSION: "8.30.0"
+          GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum --check
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks git . --config .gitleaks.toml --redact --no-banner
+      - name: pip-audit (backend and worker dependencies)
+        run: |
+          python -m pip install pip-audit==2.10.1
+          python -m venv /tmp/backend-venv && /tmp/backend-venv/bin/pip install -e "backend[dev]"
+          /tmp/backend-venv/bin/pip freeze --exclude-editable > /tmp/backend-requirements.txt
+          pip-audit --progress-spinner off -r /tmp/backend-requirements.txt
+          pip-audit --progress-spinner off -r judge-worker/requirements-dev.txt
+      - name: npm audit (frontend, including dev tools)
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+          npm --prefix tools/openapi ci --ignore-scripts
+          npm --prefix tools/openapi audit --audit-level=high
+      - name: Trivy (dependencies, Dockerfile and compose misconfigurations, secrets)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          version: v0.69.3
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore.yaml
+          skip-dirs: frontend/node_modules,frontend/tools/openapi/node_modules

@@ -186,7 +186,7 @@ describe("FocusModeProvider", () => {
       </FocusModeProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("probe")).toHaveTextContent("true|false|false|ok"));
-    expect(calls.some((c) => c.path === "/competitions/7/focus/heartbeat")).toBe(true);
+    await waitFor(() => expect(calls.some((c) => c.path === "/competitions/7/focus/heartbeat")).toBe(true));
 
     act(() => setVisibility("hidden"));
     act(() => setVisibility("visible"));

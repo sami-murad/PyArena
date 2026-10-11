@@ -68,7 +68,10 @@ async def test_hidden_failure_reveals_nothing(client: AsyncClient) -> None:
     assert body["status"] == "RUNTIME_ERROR"
     fb = body["feedback"]
     assert fb["is_public"] is False
-    assert set(fb) == {"failed_test", "total_tests", "is_public", "error_type", "message"}
+    # Only these carry values; input, expected, actual, stdout and stderr stay empty.
+    assert {k for k, v in fb.items() if v is not None} == {"failed_test", "total_tests", "is_public", "message"} | (
+        {"error_type"} if fb["error_type"] is not None else set()
+    )
     assert "rhythm" not in json.dumps(body)
 
 

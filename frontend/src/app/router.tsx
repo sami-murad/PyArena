@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
+import { RouteError } from "@/app/RouteError";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { features } from "@/config/features";
@@ -21,11 +22,15 @@ const AboutPage = lazy(() => import("@/features/about/AboutPage"));
 const NotFoundPage = lazy(() => import("@/app/NotFoundPage"));
 
 const page = (node: ReactNode) => <Suspense fallback={<PageSpinner />}>{node}</Suspense>;
+
+/** Every page gets its own error boundary, rendered inside the layout. */
+const withBoundary = <T extends object>(route: T) => ({ ...route, errorElement: <RouteError /> });
 const authed = (node: ReactNode) => page(<RequireAuth>{node}</RequireAuth>);
 
-export const router = createBrowserRouter([
+export const routeTree = [
   {
     element: <MainLayout />,
+    errorElement: <RouteError />,
     children: [
       { index: true, element: <HomePage />, handle: { marketing: true } },
       { path: "playground", element: page(<PlaygroundPage />), handle: { workspace: true } },
@@ -44,6 +49,8 @@ export const router = createBrowserRouter([
       { path: "register", element: page(<RegisterPage />) },
       { path: "about", element: page(<AboutPage />), handle: { marketing: true } },
       { path: "*", element: page(<NotFoundPage />) },
-    ],
+    ].map(withBoundary),
   },
-]);
+];
+
+export const router = createBrowserRouter(routeTree);

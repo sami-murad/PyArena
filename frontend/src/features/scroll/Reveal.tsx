@@ -40,7 +40,7 @@ export function Reveal({ children, as: Tag = "div", delay = 0, className }: Reve
   }, [visible, reduced]);
 
   const shown = visible || reduced;
-  const style: CSSProperties | undefined = delay ? { transitionDelay: `${delay}ms` } : undefined;
+  const style: CSSProperties | undefined = delay && !reduced ? { transitionDelay: `${delay}ms` } : undefined;
   return (
     <Tag
       ref={ref}
