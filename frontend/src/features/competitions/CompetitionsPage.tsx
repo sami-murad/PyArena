@@ -23,7 +23,12 @@ const CODE_PATTERN = /^[2-9A-HJ-NP-Z]{8}$/;
 export default function CompetitionsPage() {
   useDocumentTitle("Competitions");
   const navigate = useNavigate();
-  const [form, setForm] = useState<CreateCompetitionInput>({ difficulty: "any", max_players: 4, duration_minutes: 15 });
+  const [form, setForm] = useState<CreateCompetitionInput>({
+    difficulty: "any",
+    max_players: 4,
+    duration_minutes: 15,
+    focus_mode: false,
+  });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -107,6 +112,21 @@ export default function CompetitionsPage() {
               options={[5, 10, 15, 20, 30, 45].map((n) => ({ value: String(n), label: `${n} minutes` }))}
             />
           </div>
+          <label className="toggle-field">
+            <input
+              type="checkbox"
+              className="toggle-field__input"
+              checked={form.focus_mode}
+              onChange={(e) => setForm((f) => ({ ...f, focus_mode: e.target.checked }))}
+            />
+            <span className="toggle-field__text">
+              <span className="toggle-field__label">Focus Mode</span>
+              <span className="field__hint">
+                Detects tab switches and big pastes during the round, with warnings before any penalty. Players see the
+                rules and accept them first.
+              </span>
+            </span>
+          </label>
           {createError && <p className="form-error" role="alert">{createError}</p>}
           <Button type="submit" variant="primary" icon={<Plus size={17} aria-hidden />} loading={creating} block>
             Open room

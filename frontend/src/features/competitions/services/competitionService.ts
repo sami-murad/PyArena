@@ -11,6 +11,7 @@ export interface CreateCompetitionInput {
   difficulty: Difficulty | "any";
   max_players: number;
   duration_minutes: number;
+  focus_mode: boolean;
 }
 
 export const competitionService = {

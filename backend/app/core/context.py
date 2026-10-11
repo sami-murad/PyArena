@@ -15,6 +15,7 @@ from app.core.rate_limit import RateLimiter, build_rate_limiter
 from app.core.redis import create_redis
 from app.execution.client import Executor
 from app.services.competitions import CompetitionService
+from app.services.focus import FocusService
 from app.services.judge import Judge
 from app.websocket.events import EventBus, Presence, build_presence
 
@@ -32,6 +33,7 @@ class AppContext:
     idempotency: IdempotencyStore
     bus: EventBus
     competitions: CompetitionService
+    focus: FocusService
 
     async def close(self) -> None:
         await self.competitions.shutdown()
@@ -75,6 +77,7 @@ def build_context(
         judge_lock,
         maintenance=[idempotency.purge_expired],
     )
+    focus = FocusService(database.sessionmaker, settings, bus, competitions)
     return AppContext(
         settings=settings,
         db=database,
@@ -87,4 +90,5 @@ def build_context(
         idempotency=idempotency,
         bus=bus,
         competitions=competitions,
+        focus=focus,
     )

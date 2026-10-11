@@ -12,6 +12,7 @@ class CreateCompetitionRequest(BaseModel):
     difficulty: Literal["easy", "medium", "hard", "any"] = "any"
     max_players: int = Field(4, ge=2, le=16)
     duration_minutes: int = Field(15, ge=3, le=60)
+    focus_mode: bool = False
 
 
 class JoinCompetitionRequest(BaseModel):
@@ -30,6 +31,9 @@ class ParticipantOut(BaseModel):
     online: bool
     attempts: int
     has_pending: bool
+    # off | ok | away | paused | frozen | disqualified (Focus Mode; "off" when disabled)
+    focus: str = "off"
+    focus_acknowledged: bool = False
 
 
 class WinnerOut(BaseModel):
@@ -49,6 +53,7 @@ class CompetitionState(BaseModel):
     max_players: int
     min_players: int
     duration_seconds: int
+    focus_mode: bool = False
     created_at: datetime
     starts_at: datetime | None
     ends_at: datetime | None
@@ -77,6 +82,7 @@ class PlayerResult(BaseModel):
     user_id: int
     username: str
     attempts: int
+    disqualified: bool = False
     solved: bool
     is_winner: bool
     best_status: str | None

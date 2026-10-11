@@ -99,7 +99,7 @@ test("two players race and the server picks one winner", async ({ browser }) => 
   await guest.page.getByRole("button", { name: "Submit" }).click();
 
   await expect(guest.page.locator(".podium__eyebrow")).toHaveText("You won", { timeout: 30_000 });
-  // Py celebrates for the winner (the badge is the visual twin of the win sound).
+  // Deb holds up the trophy for the winner (the badge is the visual twin of the win sound).
   await expect(guest.page.getByTestId("mascot-badge")).toHaveText("You won!");
   await expect(host.page.locator(".podium__name")).toHaveText(guest.username);
   await expect(host.page.locator(".table__row--win")).toContainText(guest.username);

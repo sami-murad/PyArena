@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import { activeMascot } from "@/config/mascots";
 import { Bubble } from "@/features/mascot/Bubble";
 import { Confetti } from "@/features/mascot/Confetti";
@@ -14,6 +16,7 @@ import { cx } from "@/utils/cx";
 export function Mascot() {
   const { state, visible, react } = useMascot();
   const reduced = useReducedMotion();
+  useStickerPreload(visible);
   if (!visible) return null;
 
   const mascot = activeMascot();
@@ -53,4 +56,22 @@ export function Mascot() {
       {CONFETTI_MOODS.includes(state.mood) && state.confettiKey > 0 && <Confetti key={state.confettiKey} />}
     </aside>
   );
+}
+
+/**
+ * Warms the browser cache with every sticker once the page is idle, so a mood
+ * change shows its sticker instantly instead of flashing an empty frame.
+ */
+function useStickerPreload(enabled: boolean): void {
+  useEffect(() => {
+    if (!enabled) return;
+    const urls = Object.values(activeMascot().stickers).flat();
+    const load = () => urls.forEach((url) => (new Image().src = url));
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(load, { timeout: 4000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(load, 1500);
+    return () => window.clearTimeout(id);
+  }, [enabled]);
 }

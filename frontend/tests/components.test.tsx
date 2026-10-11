@@ -125,8 +125,8 @@ describe("SubmissionResult", () => {
 
 describe("RaceLanes", () => {
   const players: Participant[] = [
-    { user_id: 1, username: "ada", is_host: true, is_ready: true, online: true, attempts: 2, has_pending: false },
-    { user_id: 2, username: "linus", is_host: false, is_ready: true, online: false, attempts: 0, has_pending: false },
+    { user_id: 1, username: "ada", is_host: true, is_ready: true, online: true, attempts: 2, has_pending: false, focus: "off", focus_acknowledged: false },
+    { user_id: 2, username: "linus", is_host: false, is_ready: true, online: false, attempts: 0, has_pending: false, focus: "off", focus_acknowledged: false },
   ];
 
   it("draws one mark per attempt and crowns the winner", () => {

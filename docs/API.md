@@ -25,6 +25,7 @@ The original unversioned paths (`/api/...`) still work but are deprecated: they 
 | 400 | Malformed `Idempotency-Key` |
 | 409 | Conflict with the current state (room full, already started, previous submission pending, same Idempotency-Key still in flight) |
 | 422 | Invalid input (sizes, formats), or an Idempotency-Key reused for a different request |
+| 423 | Submissions temporarily locked by Focus Mode (`focus_paused`, `focus_frozen`); see `Retry-After` |
 | 429 | Rate limited; see `Retry-After` |
 | 503 | The judge worker is unavailable |
 
@@ -37,6 +38,7 @@ The original unversioned paths (`/api/...`) still work but are deprecated: they 
 | `POST /auth/register` | 20 per hour per IP |
 | `POST /competitions/join` | 20 per minute per user |
 | Submissions | 30 per minute per user, plus a 3 s cooldown per competition |
+| Focus events and heartbeats | 120 per minute per user |
 
 ## Endpoints
 
@@ -116,7 +118,7 @@ A submission has `status` (`ACCEPTED, WRONG_ANSWER, SYNTAX_ERROR, RUNTIME_ERROR,
 ### Competitions (signed in)
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| POST | `/competitions` | `{difficulty: easy\|medium\|hard\|any, max_players: 2–16, duration_minutes: 3–60}` | creates a room, you are host |
+| POST | `/competitions` | `{difficulty: easy\|medium\|hard\|any, max_players: 2–16, duration_minutes: 3–60, focus_mode?: bool}` | creates a room, you are host |
 | GET | `/competitions` | | your recent rooms |
 | POST | `/competitions/join` | `{code}` | case-insensitive |
 | GET | `/competitions/{id}` | | full state (members only) |
@@ -125,7 +127,19 @@ A submission has `status` (`ACCEPTED, WRONG_ANSWER, SYNTAX_ERROR, RUNTIME_ERROR,
 | POST | `/competitions/{id}/leave` | | |
 | POST | `/competitions/{id}/cancel` | | host only, lobby only |
 | POST | `/competitions/{id}/submissions` | `{code}` | 202; verdict arrives by socket |
-| GET | `/competitions/{id}/results` | | after the room ends |
+| GET | `/competitions/{id}/results` | | after the room ends; players carry `disqualified` |
+
+With Focus Mode on, `ready` answers 409 `focus_ack_required` until the player accepted the notice, `start` lists unaccepted players as blockers, and a submission can be refused with 423 (`focus_paused`, `focus_frozen`) or 403 (`focus_disqualified`). Each participant in the state carries `focus` (`off`, `ok`, `away`, `paused`, `frozen`, `disqualified`) and `focus_acknowledged`.
+
+### Focus Mode (signed in, members only, `/api/v1` only)
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/competitions/{id}/focus` | | your state: `status`, `counted_violations`, `warnings_left`, `next_action`, `paused_until`, `frozen_until`, `disqualified`, `policy` |
+| POST | `/competitions/{id}/focus/acknowledge` | | accept the Focus Mode notice (needed before "ready") |
+| POST | `/competitions/{id}/focus/events` | `{kind: hidden\|blur\|visible\|focus\|fullscreen_exit\|paste, paste_chars?, away_ms?}` | returns `{state, recorded, counted, action}`; ignored unless the round is running |
+| POST | `/competitions/{id}/focus/heartbeat` | | every `policy.heartbeat_seconds` while the round runs |
+
+409 `focus_off` when the room does not use Focus Mode. Escalation: counted violations 1–3 warn, the 4th pauses submissions for 30 s, the 5th and 6th freeze them for 60 s, the 7th disqualifies (all configurable, see `backend/.env.example`). Absences shorter than 2 s never count; the duration is the smaller of the server's and the browser's measurement. Leaving fullscreen is recorded but never counts.
 
 ## Socket.IO events
 
@@ -152,4 +166,6 @@ Connect to `/socket.io` with the session cookie. Unauthenticated connections are
 | `competition:winner` | `{competition_id, winner}` |
 | `competition:finished` | `{competition_id, reason: solved\|time_up\|host_cancelled\|everyone_left\|idle}` |
 | `player:disconnected` | `{competition_id, user_id}` |
+| `focus:violation` | `{competition_id, user_id, username, kind: away\|paste, pending, action?}`; `pending: true` when a player just left the tab |
+| `focus:resumed` | `{competition_id, user_id, username, counted, action, count?}`; the player is back |
 | `room:error` | `{message}` (to one socket) |

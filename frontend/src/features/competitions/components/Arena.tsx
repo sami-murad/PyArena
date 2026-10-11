@@ -8,6 +8,9 @@ import { Textarea } from "@/components/ui/Input";
 import { appConfig } from "@/config/appConfig";
 import { MatchTimer } from "@/features/competitions/components/MatchTimer";
 import { RaceLanes } from "@/features/competitions/components/RaceLanes";
+import { FocusBanner } from "@/features/focus/FocusBanner";
+import { useFocusMode } from "@/features/focus/FocusModeProvider";
+import { FocusOverlay } from "@/features/focus/FocusOverlay";
 import type { ActivityItem } from "@/features/competitions/hooks/useCompetitionRoom";
 import { OutputConsole } from "@/features/playground/components/OutputConsole";
 import { useCodeRunner } from "@/features/playground/hooks/useCodeRunner";
@@ -36,6 +39,7 @@ export function Arena({ state, question, myUserId, secondsLeft, attempts, mySubm
   const [stdin, setStdin] = useState("");
   const [panel, setPanel] = useState<"verdict" | "run">("verdict");
   const runner = useCodeRunner();
+  const focusMode = useFocusMode();
   const me = state.participants.find((p) => p.user_id === myUserId);
   const judging = mySubmission?.status === "PENDING" || me?.has_pending;
 
@@ -79,13 +83,15 @@ export function Arena({ state, question, myUserId, secondsLeft, attempts, mySubm
             <Button size="sm" variant="secondary" icon={<Play size={16} aria-hidden />} onClick={run} loading={runner.phase === "running"}>
               Run
             </Button>
-            <Button variant="primary" icon={<Send size={16} aria-hidden />} onClick={submit} loading={submitting || judging} disabled={secondsLeft <= 0}>
+            <Button variant="primary" icon={<Send size={16} aria-hidden />} onClick={submit} loading={submitting || judging} disabled={secondsLeft <= 0 || focusMode.submitBlocked}>
               {judging ? "Judging" : "Submit"}
             </Button>
           </div>
         </div>
+        <FocusBanner />
         <div className="panel arena__editor">
-          <LazyCodeEditor value={code} onChange={setCode} onRun={run} path={`competition-${state.id}.py`} />
+          <LazyCodeEditor value={code} onChange={setCode} onRun={run} path={`competition-${state.id}.py`} readOnly={focusMode.locked} />
+          <FocusOverlay />
         </div>
         <div className="panel arena__results">
           <div className="tabs" role="tablist" aria-label="Results">
@@ -119,7 +125,13 @@ export function Arena({ state, question, myUserId, secondsLeft, attempts, mySubm
           <h2 id="race-heading" className="section-title">
             Race
           </h2>
-          <RaceLanes participants={state.participants} attempts={attempts} winner={state.winner} myUserId={myUserId} />
+          <RaceLanes
+            participants={state.participants}
+            attempts={attempts}
+            winner={state.winner}
+            myUserId={myUserId}
+            focusGraceMs={focusMode.policy?.grace_ms ?? 2000}
+          />
         </section>
         <section aria-labelledby="feed-heading" className="feed">
           <h2 id="feed-heading" className="section-title">

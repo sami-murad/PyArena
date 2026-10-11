@@ -64,6 +64,7 @@ Assets: users' accounts and sessions, the integrity of competition results, hidd
 | **T**ampering | Client manipulates timers, verdicts or winner | browser → API | Server-side judging, server timestamps, atomic conditional `UPDATE` for the winner | none known |
 | | Job modifies worker code or other jobs' files | job → worker | Read-only root filesystem, own UID and `0700` directory per job, cleanup that does not follow symlinks | none known |
 | | Replayed or duplicated submissions | browser → API | Idempotency keys scoped per user; one pending submission per player; cooldown | none known |
+| | Player looks things up in another tab during a Focus Mode round | browser | Tab and window focus signals, server-side escalation enforced at submission time | Detection depends on an unmodified browser; see "Focus Mode: honest limits" |
 | **R**epudiation | "I never submitted that" / disputes over who won | API | Every submission stored with server receipt order (id) and time; JSON logs with request id, user, competition and submission | Logs live as long as you keep them |
 | **I**nformation disclosure | Hidden tests leak | API → browser | Never included in responses; failures on hidden tests show no input or output | Public repository exposes the seed bank |
 | | Secrets leak to user code | worker → job | Environment whitelist, separate UID, no secrets in the worker image | Kernel bugs (see gVisor) |
@@ -90,6 +91,17 @@ Assets: users' accounts and sessions, the integrity of competition results, hidd
 | Clickjacking, MIME sniffing | `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`, `nosniff` (nginx) |
 | Duplicate actions from retries | `Idempotency-Key` on execute and submissions; stored responses are scoped per user (or IP), so one user can never read another's stored response; only 2xx responses are stored |
 | Information leaks through operations endpoints | `/metrics` is not proxied by nginx and can require `METRICS_TOKEN`; `/health/ready` reports only up/down per dependency |
+
+### Focus Mode: honest limits
+
+Focus Mode is a fair-play signal, not anti-cheat. What it can and cannot do:
+
+- It only knows what the browser reports: the tab was hidden, the window lost focus, a large paste happened. A modified client, a browser extension or a script can suppress those signals. A long gap in heartbeats during a running round is recorded, but the server cannot tell *why* a client went quiet.
+- It cannot see a second device, another person in the room, or a second monitor showing another app while the window keeps focus.
+- Absence length is the smaller of the server's measurement and the browser's own, so network delay never counts against a player; a dishonest client can under-report, which is no worse than not reporting.
+- It never blocks the browser: no disabled shortcuts, no forced fullscreen, no clipboard reading (only the length of a paste is sent).
+- Absences under 2 seconds are ignored so that screen readers, OS prompts and notifications do not count. Players who need more should ask for a room without Focus Mode; the notice says so before the round.
+- Penalties are enforced on the server when a submission arrives (423 while paused or frozen, 403 after disqualification); a disqualified player's waiting submissions are cancelled and an accepted one can never win.
 
 ### Known limitations
 

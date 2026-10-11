@@ -46,6 +46,7 @@ from app.models import (
     User,
 )
 from app.repositories.competitions import CompetitionRepository, generate_room_code
+from app.repositories.focus import FocusRepository
 from app.repositories.questions import QuestionRepository
 from app.repositories.submissions import SubmissionRepository
 from app.schemas.competitions import (
@@ -58,6 +59,7 @@ from app.schemas.competitions import (
     ResultSubmission,
     WinnerOut,
 )
+from app.services.focus import session_status, submission_block
 from app.services.judge import Judge
 from app.services.questions import to_detail
 from app.websocket import events as ev
@@ -152,6 +154,7 @@ class CompetitionService:
                 difficulty=difficulty,
                 max_players=max_players,
                 duration_seconds=req.duration_minutes * 60,
+                focus_mode=req.focus_mode,
             )
             s.add(comp)
             await s.flush()
@@ -231,6 +234,10 @@ class CompetitionService:
                 raise conflict("You can only change readiness in the lobby.")
             member = await repo.membership(cid, user.id)
             assert member is not None
+            if comp.focus_mode and ready and comp.host_id != user.id:
+                focus = await FocusRepository(s).get(cid, user.id)
+                if focus is None or focus.acknowledged_at is None:
+                    raise conflict("Read and accept the Focus Mode notice before getting ready.", "focus_ack_required")
             member.is_ready = True if comp.host_id == user.id else ready
             comp.last_activity_at = utcnow()
             await s.commit()
@@ -264,7 +271,7 @@ class CompetitionService:
             comp = await self._member_comp(repo, cid, user.id, active_only=True)
             if comp.host_id != user.id:
                 raise forbidden("Only the host can start the competition.")
-            blockers = self._start_blockers(comp)
+            blockers = self._start_blockers(comp, await self._acknowledged(s, comp))
             if blockers:
                 raise conflict(blockers[0], "not_ready")
             question = await QuestionRepository(s).random_active(comp.difficulty)
@@ -318,6 +325,10 @@ class CompetitionService:
                 assert comp.ends_at is not None and comp.question_id is not None
                 if utcnow() > comp.ends_at:
                     raise conflict("Time is up.", "time_up")
+                if comp.focus_mode:
+                    blocked = submission_block(await FocusRepository(s).get(cid, user.id), utcnow())
+                    if blocked is not None:
+                        raise blocked
                 subs = SubmissionRepository(s)
                 if await subs.count_pending(cid, user.id):
                     raise conflict("Your previous submission is still being judged.", "pending")
@@ -356,6 +367,7 @@ class CompetitionService:
                 raise conflict("Results are available once the competition has ended.", "not_ended")
             state = await self._snapshot(s, comp)
             submissions = await SubmissionRepository(s).for_competition(cid)
+            focus = await FocusRepository(s).for_competition(cid) if comp.focus_mode else {}
 
         def after_start(sub: Submission) -> float | None:
             return (sub.created_at - comp.starts_at).total_seconds() if comp.starts_at else None
@@ -369,6 +381,7 @@ class CompetitionService:
                     user_id=p.user_id,
                     username=p.user.username,
                     attempts=len(mine),
+                    disqualified=bool(focus.get(p.user_id) and focus[p.user_id].disqualified_at),
                     solved=bool(accepted),
                     is_winner=comp.winner_user_id == p.user_id,
                     best_status=_best_status(mine),
@@ -564,7 +577,7 @@ class CompetitionService:
                     submission.total_count = outcome.total
                     submission.feedback = outcome.feedback
                     submission.judged_at = utcnow()
-                    if outcome.status == SubmissionStatus.ACCEPTED:
+                    if outcome.status == SubmissionStatus.ACCEPTED and not await _disqualified(s, cid, sub_user):
                         won = await CompetitionRepository(s).claim_winner(cid, sub_id, sub_user, sub_created)
                     await s.commit()
                 observe_submission("competition", submission)
@@ -628,7 +641,13 @@ class CompetitionService:
             raise forbidden("You left this competition. Rejoin with the room code.")
         return comp
 
-    def _start_blockers(self, comp: Competition) -> list[str]:
+    async def _acknowledged(self, s: AsyncSession, comp: Competition) -> set[int]:
+        if not comp.focus_mode:
+            return set()
+        sessions = await FocusRepository(s).for_competition(comp.id)
+        return {uid for uid, f in sessions.items() if f.acknowledged_at is not None}
+
+    def _start_blockers(self, comp: Competition, acknowledged: set[int] | None = None) -> list[str]:
         blockers: list[str] = []
         if comp.status != CompetitionStatus.WAITING:
             blockers.append("The competition is not in the lobby.")
@@ -640,11 +659,17 @@ class CompetitionService:
         not_ready = [p.user.username for p in active if not p.is_ready and p.user_id != comp.host_id]
         if not_ready:
             blockers.append("Waiting for " + ", ".join(not_ready) + " to get ready.")
+        if comp.focus_mode:
+            pending = [p.user.username for p in active if p.user_id not in (acknowledged or set())]
+            if pending:
+                blockers.append("Waiting for " + ", ".join(pending) + " to accept the Focus Mode notice.")
         return blockers
 
     async def _snapshot(self, s: AsyncSession, comp: Competition) -> CompetitionState:
         submissions = await SubmissionRepository(s).for_competition(comp.id)
         online = await self.presence.online(comp.id)
+        focus = await FocusRepository(s).for_competition(comp.id) if comp.focus_mode else {}
+        now = utcnow()
         participants = [
             ParticipantOut(
                 user_id=p.user_id,
@@ -654,11 +679,12 @@ class CompetitionService:
                 online=p.user_id in online,
                 attempts=len([x for x in submissions if x.user_id == p.user_id]),
                 has_pending=any(x.user_id == p.user_id and x.status == SubmissionStatus.PENDING for x in submissions),
+                focus=session_status(focus.get(p.user_id), comp.focus_mode, now),
+                focus_acknowledged=bool(focus.get(p.user_id) and focus[p.user_id].acknowledged_at),
             )
             for p in comp.players
             if p.left_at is None
         ]
-        now = utcnow()
         question = None
         started = comp.starts_at is not None and comp.starts_at <= now and comp.status != CompetitionStatus.COUNTDOWN
         if comp.question_id and started:
@@ -676,7 +702,7 @@ class CompetitionService:
                 accepted_at=comp.winner_accepted_at,
                 solve_seconds=round(solve, 2),
             )
-        blockers = self._start_blockers(comp)
+        blockers = self._start_blockers(comp, {uid for uid, f in focus.items() if f.acknowledged_at is not None})
         return CompetitionState(
             id=comp.id,
             code=comp.code,
@@ -686,6 +712,7 @@ class CompetitionService:
             max_players=comp.max_players,
             min_players=self.settings.competition_min_players,
             duration_seconds=comp.duration_seconds,
+            focus_mode=comp.focus_mode,
             created_at=comp.created_at,
             starts_at=comp.starts_at,
             ends_at=comp.ends_at,
@@ -698,6 +725,11 @@ class CompetitionService:
             can_start=not blockers,
             start_blockers=blockers,
         )
+
+
+async def _disqualified(s: AsyncSession, cid: int, user_id: int) -> bool:
+    focus = await FocusRepository(s).get(cid, user_id)
+    return focus is not None and focus.disqualified_at is not None
 
 
 def ev_active() -> tuple[CompetitionStatus, ...]:

@@ -51,16 +51,18 @@ class SubmissionRepository:
             stmt = stmt.where(Submission.user_id == user_id)
         return int(await self.session.scalar(stmt) or 0)
 
-    async def cancel_pending(self, competition_id: int) -> list[int]:
-        ids = list(
-            (
-                await self.session.execute(
-                    select(Submission.id).where(
-                        Submission.competition_id == competition_id, Submission.status == SubmissionStatus.PENDING
-                    )
-                )
-            ).scalars()
+    async def cancel_pending(
+        self,
+        competition_id: int,
+        user_id: int | None = None,
+        message: str = "The competition ended before this submission was judged.",
+    ) -> list[int]:
+        query = select(Submission.id).where(
+            Submission.competition_id == competition_id, Submission.status == SubmissionStatus.PENDING
         )
+        if user_id is not None:
+            query = query.where(Submission.user_id == user_id)
+        ids = list((await self.session.execute(query)).scalars())
         if ids:
             await self.session.execute(
                 update(Submission)
@@ -68,7 +70,7 @@ class SubmissionRepository:
                 .values(
                     status=SubmissionStatus.CANCELLED,
                     judged_at=utcnow(),
-                    feedback={"message": "The competition ended before this submission was judged."},
+                    feedback={"message": message},
                 )
             )
         return ids

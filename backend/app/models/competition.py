@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base, UTCDateTime, utcnow
@@ -33,6 +33,8 @@ class Competition(Base):
     question_id: Mapped[int | None] = mapped_column(ForeignKey("questions.id"), nullable=True)
     max_players: Mapped[int] = mapped_column(Integer, default=8)
     duration_seconds: Mapped[int] = mapped_column(Integer, default=900)
+    # Focus Mode: the host chose to have tab switches detected and escalated.
+    focus_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     last_activity_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     starts_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

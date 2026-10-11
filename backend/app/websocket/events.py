@@ -32,6 +32,8 @@ SUBMISSION_RESULT = "submission:result"
 COMPETITION_WINNER = "competition:winner"
 COMPETITION_FINISHED = "competition:finished"
 PLAYER_DISCONNECTED = "player:disconnected"
+FOCUS_VIOLATION = "focus:violation"  # a player left the tab, or a counted violation happened
+FOCUS_RESUMED = "focus:resumed"  # the player is back; says whether the absence counted
 
 
 def competition_room(competition_id: int) -> str:

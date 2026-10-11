@@ -75,6 +75,7 @@ export function ResultsView({ state, myUserId }: { state: CompetitionState; myUs
                         {p.is_winner && <Crown size={15} aria-label="Winner" />}
                         {p.username}
                         {p.user_id === myUserId && <span className="roster__you"> (you)</span>}
+                        {p.disqualified && <StatusBadge tone="danger">Disqualified</StatusBadge>}
                       </span>
                     </td>
                     <td>{p.attempts}</td>

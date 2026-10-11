@@ -135,6 +135,9 @@ export interface Participant {
   online: boolean;
   attempts: number;
   has_pending: boolean;
+  /** Focus Mode status ("off" when the room does not use Focus Mode). */
+  focus: FocusStatus;
+  focus_acknowledged: boolean;
 }
 
 export interface Winner {
@@ -154,6 +157,7 @@ export interface CompetitionState {
   max_players: number;
   min_players: number;
   duration_seconds: number;
+  focus_mode: boolean;
   created_at: string;
   starts_at: string | null;
   ends_at: string | null;
@@ -182,6 +186,7 @@ export interface PlayerResult {
   user_id: number;
   username: string;
   attempts: number;
+  disqualified: boolean;
   solved: boolean;
   is_winner: boolean;
   best_status: SubmissionStatus | null;
@@ -208,4 +213,42 @@ export interface CompetitionResults {
 export interface HealthResponse {
   status: "ok" | "degraded";
   checks: Record<string, string>;
+}
+
+/* ------------------------------------------------------------- Focus Mode */
+
+export type FocusStatus = "off" | "ok" | "away" | "paused" | "frozen" | "disqualified";
+export type FocusEventKind = "hidden" | "blur" | "visible" | "focus" | "fullscreen_exit" | "paste";
+export type FocusAction = "pending" | "ignored" | "recorded" | "warn" | "pause" | "freeze" | "disqualify";
+
+export interface FocusPolicy {
+  warn_limit: number;
+  pause_seconds: number;
+  freeze_seconds: number;
+  dq_after: number;
+  grace_ms: number;
+  paste_limit_chars: number;
+  heartbeat_seconds: number;
+}
+
+export interface FocusState {
+  competition_id: number;
+  enabled: boolean;
+  acknowledged: boolean;
+  status: FocusStatus;
+  counted_violations: number;
+  warnings_left: number;
+  next_action: FocusAction | null;
+  paused_until: string | null;
+  frozen_until: string | null;
+  disqualified: boolean;
+  server_time: string;
+  policy: FocusPolicy;
+}
+
+export interface FocusEventResult {
+  state: FocusState;
+  recorded: boolean;
+  counted: boolean;
+  action: FocusAction | null;
 }

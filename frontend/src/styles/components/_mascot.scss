@@ -55,13 +55,18 @@
     block-size: 100%;
     object-fit: contain;
     user-select: none;
+    // While a sticker is still loading, never let the alt text spill out
+    // visually; screen readers still announce it.
+    color: transparent;
+    font-size: 0;
   }
 
   &--reacting &__sticker {
     animation: mascot-pop var(--duration-slow) var(--ease-out);
   }
 
-  &[data-mood="celebrate"] &__sticker {
+  &[data-mood="celebrate"] &__sticker,
+  &[data-mood="trophy"] &__sticker {
     animation: mascot-hop 0.5s var(--ease-out) 2;
   }
 

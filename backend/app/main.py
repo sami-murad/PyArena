@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api.routes import auth, competitions, execute, health, questions, snippets, submissions, users
+from app.api.routes import auth, competitions, execute, focus, health, questions, snippets, submissions, users
 from app.config import Settings, get_settings
 from app.core.context import AppContext, build_context
 from app.core.errors import ServiceError
@@ -38,6 +38,8 @@ from app.websocket.server import SocketIOBus, create_socket_server, register_han
 API_V1 = "/api/v1"
 LEGACY_API = "/api"
 ROUTERS = (health, auth, users, execute, questions, submissions, competitions, snippets)
+# Added after the move to /api/v1: no unversioned alias.
+V1_ONLY_ROUTERS = (focus,)
 
 
 def create_fastapi_app(ctx: AppContext, start_background: bool = True) -> FastAPI:
@@ -91,6 +93,8 @@ def create_fastapi_app(ctx: AppContext, start_background: bool = True) -> FastAP
         return JSONResponse({"detail": exc.message, "code": exc.code}, status_code=exc.status_code, headers=headers)
 
     for router in ROUTERS:
+        app.include_router(router.router, prefix=API_V1)
+    for router in V1_ONLY_ROUTERS:
         app.include_router(router.router, prefix=API_V1)
     for router in ROUTERS:
         app.include_router(router.router, prefix=LEGACY_API, include_in_schema=False)

@@ -3,7 +3,7 @@
  * finished, a verdict arrived); only useReactions decides what the mascot and
  * the sound do about them, so no component triggers a reaction directly.
  */
-import type { ExecutionStatus, SubmissionStatus } from "@/types/api";
+import type { ExecutionStatus, FocusAction, SubmissionStatus } from "@/types/api";
 
 export type ReactionEvent =
   | { type: "run:started" }
@@ -18,7 +18,8 @@ export type ReactionEvent =
   | { type: "competition:verdict"; status: SubmissionStatus; passed?: number; total?: number }
   | { type: "competition:won" }
   | { type: "competition:lost"; winner: string }
-  | { type: "competition:time-up" };
+  | { type: "competition:time-up" }
+  | { type: "focus:violation"; action: FocusAction; count: number; warnLimit: number };
 
 type Listener = (event: ReactionEvent) => void;
 const listeners = new Set<Listener>();

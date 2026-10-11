@@ -1,5 +1,5 @@
 /** Socket.IO event names and payloads. Must match backend/app/websocket/events.py. */
-import type { CompetitionState, Participant, QuestionDetail, SubmissionStatus, Winner } from "@/types/api";
+import type { CompetitionState, FocusAction, Participant, QuestionDetail, SubmissionStatus, Winner } from "@/types/api";
 
 export const SocketEvents = {
   roomJoin: "room:join",
@@ -15,6 +15,8 @@ export const SocketEvents = {
   winner: "competition:winner",
   finished: "competition:finished",
   playerDisconnected: "player:disconnected",
+  focusViolation: "focus:violation",
+  focusResumed: "focus:resumed",
 } as const;
 
 export interface Ack {
@@ -67,4 +69,24 @@ export interface FinishedPayload {
 export interface ParticipantsPayload {
   competition_id: number;
   participants: Participant[];
+}
+
+/** A player left the tab (pending) or a counted violation such as a large paste happened. */
+export interface FocusViolationPayload {
+  competition_id: number;
+  user_id: number;
+  username: string;
+  kind: "away" | "paste";
+  pending: boolean;
+  action?: FocusAction;
+}
+
+/** The player is back; `counted` says whether the absence counted. */
+export interface FocusResumedPayload {
+  competition_id: number;
+  user_id: number;
+  username: string;
+  counted: boolean;
+  action: FocusAction;
+  count?: number;
 }

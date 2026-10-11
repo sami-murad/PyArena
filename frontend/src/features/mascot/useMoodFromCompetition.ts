@@ -31,6 +31,29 @@ export function reactionForCompetition(event: ReactionEvent): Reaction | null {
       };
     case "competition:time-up":
       return { mood: "concerned", sound: "lose", line: "Time's up! Nobody cracked it.", badge: { text: "Time's up", tone: "warning" } };
+    case "focus:violation":
+      return reactionForFocus(event.action, event.count, event.warnLimit);
+    default:
+      return null;
+  }
+}
+
+/** Counted Focus Mode violations: always a visible badge, never sound alone. */
+export function reactionForFocus(action: string, count: number, warnLimit: number): Reaction | null {
+  switch (action) {
+    case "warn":
+      return {
+        mood: "concerned",
+        sound: "error",
+        line: "Hey, eyes on this tab!",
+        badge: { text: `Focus warning ${count}/${warnLimit}`, tone: "warning" },
+      };
+    case "pause":
+      return { mood: "concerned", sound: "limit", line: "Submissions paused for a bit.", badge: { text: "Paused", tone: "warning" } };
+    case "freeze":
+      return { mood: "concerned", sound: "limit", line: "Editor frozen. Stay with me!", badge: { text: "Frozen", tone: "danger" } };
+    case "disqualify":
+      return { mood: "concerned", sound: "lose", line: "Disqualified this round. Next time!", badge: { text: "Disqualified", tone: "danger" } };
     default:
       return null;
   }

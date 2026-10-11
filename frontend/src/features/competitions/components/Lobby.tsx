@@ -1,10 +1,11 @@
-import { Check, Crown, DoorOpen, Hourglass, Play, XCircle } from "lucide-react";
+import { Check, Crown, DoorOpen, Eye, Hourglass, Play, XCircle } from "lucide-react";
 import { useState } from "react";
 
 import { StatusBadge } from "@/components/feedback/StatusBadge";
 import { useToast } from "@/components/feedback/Toast";
 import { Button } from "@/components/ui/Button";
 import { InviteCard } from "@/features/competitions/components/InviteCard";
+import { FocusDisclosure } from "@/features/focus/FocusDisclosure";
 import { errorMessage } from "@/services/apiClient";
 import type { CompetitionState } from "@/types/api";
 import { capitalize } from "@/utils/status";
@@ -25,6 +26,8 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
   const isHost = state.host_id === myUserId;
   const me = state.participants.find((p) => p.user_id === myUserId);
   const seatsLeft = state.max_players - state.participants.length;
+  const needsNotice = state.focus_mode && me !== undefined && !me.focus_acknowledged;
+  const [noticeOpen, setNoticeOpen] = useState(needsNotice);
 
   async function act(name: string, fn: () => Promise<void>) {
     setBusy(name);
@@ -42,6 +45,18 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
       <div className="lobby__main">
         <header className="lobby__header">
           <h1 className="page__title">Lobby</h1>
+          {state.focus_mode && (
+            <p className="lobby__focus">
+              <Eye size={15} aria-hidden /> Focus Mode is on for this room.{" "}
+              {needsNotice ? (
+                <button type="button" className="link-button" onClick={() => setNoticeOpen(true)}>
+                  Read the notice to join in
+                </button>
+              ) : (
+                <span className="muted">You accepted the notice.</span>
+              )}
+            </p>
+          )}
           <p className="page__lead">
             {capitalize(state.difficulty ?? "any")} difficulty, {Math.round(state.duration_seconds / 60)} minutes. The
             first correct solution wins.
@@ -77,6 +92,11 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
                       Not ready
                     </StatusBadge>
                   ))}
+                {state.focus_mode && !p.focus_acknowledged && (
+                  <StatusBadge tone="neutral" icon={<Eye size={13} aria-hidden />}>
+                    Reading notice
+                  </StatusBadge>
+                )}
                 <span className={cx("presence", p.online ? "presence--on" : "presence--off")} title={p.online ? "Online" : "Offline"} aria-label={p.online ? "Online" : "Offline"} />
               </li>
             ))}
@@ -111,7 +131,7 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
               size="lg"
               icon={<Check size={18} aria-hidden />}
               loading={busy === "ready"}
-              onClick={() => act("ready", () => onReady(!me?.is_ready))}
+              onClick={() => (needsNotice ? setNoticeOpen(true) : act("ready", () => onReady(!me?.is_ready)))}
               aria-pressed={me?.is_ready ?? false}
             >
               {me?.is_ready ? "Ready. Click to undo" : "I'm ready"}
@@ -128,6 +148,7 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
         )}
         {!isHost && <p className="lobby__blocker">The host starts the competition once everyone is ready.</p>}
       </div>
+      <FocusDisclosure open={noticeOpen && needsNotice} onClose={() => setNoticeOpen(false)} />
       <aside className="lobby__side">
         <InviteCard code={state.code} />
         <div className="rules">
@@ -136,6 +157,7 @@ export function Lobby({ state, myUserId, onReady, onStart, onCancel, onLeave }: 
             <li>Everyone gets the same question at the same moment.</li>
             <li>Submit as often as you like. Each submission is judged on hidden tests.</li>
             <li>The first submission the server receives that passes every test wins.</li>
+            {state.focus_mode && <li>Focus Mode: leaving the tab for 2 seconds or more counts, with warnings first.</li>}
           </ol>
         </div>
       </aside>

@@ -9,10 +9,12 @@ PostgreSQL 16 with SQLAlchemy 2 (async, `asyncpg`) and Alembic. All timestamps a
 | `users` | accounts | unique `username`, unique `email` (lower-cased), Argon2id `password_hash`; `deleted_at` (soft delete) |
 | `questions` | problem statements, starter code, limits | unique `slug` |
 | `test_cases` | judge tests; `is_public` marks examples | FK `question_id` (cascade), unique (`question_id`, `ordinal`) |
-| `competitions` | rooms and their lifecycle | unique `code`, FK `host_id`, `question_id`, `winner_user_id`, `winner_submission_id`; indexed `status` |
+| `competitions` | rooms and their lifecycle; `focus_mode` | unique `code`, FK `host_id`, `question_id`, `winner_user_id`, `winner_submission_id`; indexed `status` |
 | `competition_players` | membership, readiness, `left_at` | unique (`competition_id`, `user_id`) |
 | `submissions` | every practice and competition submission | FKs to user, question, competition; index (`competition_id`, `id`) for receipt order; index (`user_id`, `created_at DESC`) for "my submissions" |
 | `saved_snippets` | users' saved code | FK `user_id` (cascade); `deleted_at` (soft delete) |
+| `focus_sessions` | one player's Focus Mode state in one competition: notice accepted, counted violations, pause/freeze ends, disqualification, current absence, last heartbeat | unique (`competition_id`, `user_id`); FK `competition_id` (cascade) |
+| `focus_violations` | every focus event the server recorded, counted or not, with server-measured times and the action taken | FK `session_id` (cascade); index (`session_id`, `id`) |
 | `idempotency_keys` | stored responses for repeated `Idempotency-Key` requests | unique (`scope`, `key`); index on `expires_at`; expired rows purged by the sweeper |
 
 `competitions.winner_submission_id` and `submissions.competition_id` reference each other, so the migration creates that foreign key last.
@@ -40,6 +42,7 @@ PostgreSQL connections use `pool_pre_ping` (detects connections the server close
 | 0002 | `submissions(user_id, created_at DESC)` replaces the ascending index |
 | 0003 | `deleted_at` on `users` and `saved_snippets` |
 | 0004 | `idempotency_keys` table |
+| 0005 | `competitions.focus_mode`, `focus_sessions`, `focus_violations` |
 
 `tests/test_migrations.py` runs upgrade, `alembic check` (models match), downgrade and upgrade again on SQLite, and on PostgreSQL when `TEST_DATABASE_URL` is set.
 

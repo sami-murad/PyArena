@@ -82,6 +82,19 @@ class Settings(BaseSettings):
     rate_register_per_hour: int = 20
     rate_join_per_minute: int = 20
     rate_submit_per_minute: int = 30
+    rate_focus_per_minute: int = 120
+
+    # Focus Mode escalation (docs/adr/0006-focus-mode-design.md). Counted
+    # violations 1..WARN_LIMIT warn; the next pauses submissions; the ones after
+    # freeze them; violation number WARN_LIMIT + DQ_AFTER disqualifies.
+    focus_warn_limit: int = Field(3, ge=0, le=20)
+    focus_pause_seconds: int = Field(30, ge=0, le=600)
+    focus_freeze_seconds: int = Field(60, ge=0, le=1800)
+    focus_dq_after: int = Field(4, ge=1, le=50)
+    focus_grace_ms: int = Field(2000, ge=0, le=30_000)
+    focus_paste_limit_chars: int = Field(200, ge=1)
+    focus_heartbeat_seconds: int = Field(10, ge=2, le=120)
+    focus_heartbeat_gap_seconds: int = Field(45, ge=5, le=600)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -9,6 +9,8 @@ import {
   SocketEvents,
   type Ack,
   type FinishedPayload,
+  type FocusResumedPayload,
+  type FocusViolationPayload,
   type StartedPayload,
   type SubmissionReceivedPayload,
   type SubmissionResultPayload,
@@ -162,6 +164,17 @@ export function useCompetitionRoom(competitionId: number, myUserId: number | und
     };
     const onRoomError = (p: { message: string }) => log(p.message, "danger");
 
+    // Focus Mode: only counted events reach the feed; the lane shows "left tab" itself.
+    const onFocusViolation = (p: FocusViolationPayload) => {
+      if (p.competition_id !== competitionId || p.pending) return;
+      const who = p.user_id === myUserId ? "You" : p.username;
+      log(`${who} pasted a large block (Focus Mode: ${p.action ?? "noted"}).`, "accent");
+    };
+    const onFocusResumed = (p: FocusResumedPayload) => {
+      if (p.competition_id !== competitionId || !p.counted) return;
+      const who = p.user_id === myUserId ? "You" : p.username;
+      log(`${who} left the tab (Focus Mode: ${p.action}).`, "accent");
+    };
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("connect_error", onConnectError);
@@ -173,6 +186,8 @@ export function useCompetitionRoom(competitionId: number, myUserId: number | und
     socket.on(SocketEvents.winner, onWinner);
     socket.on(SocketEvents.finished, onFinished);
     socket.on(SocketEvents.roomError, onRoomError);
+    socket.on(SocketEvents.focusViolation, onFocusViolation);
+    socket.on(SocketEvents.focusResumed, onFocusResumed);
     if (socket.connected) join();
     else socket.connect();
 
@@ -188,6 +203,8 @@ export function useCompetitionRoom(competitionId: number, myUserId: number | und
       socket.off(SocketEvents.winner, onWinner);
       socket.off(SocketEvents.finished, onFinished);
       socket.off(SocketEvents.roomError, onRoomError);
+      socket.off(SocketEvents.focusViolation, onFocusViolation);
+      socket.off(SocketEvents.focusResumed, onFocusResumed);
     };
   }, [competitionId, myUserId, applyState, log]);
 

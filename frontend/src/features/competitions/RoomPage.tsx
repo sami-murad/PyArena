@@ -13,6 +13,7 @@ import { CountdownOverlay } from "@/features/competitions/components/CountdownOv
 import { Lobby } from "@/features/competitions/components/Lobby";
 import { ResultsView } from "@/features/competitions/components/ResultsView";
 import { useCompetitionRoom } from "@/features/competitions/hooks/useCompetitionRoom";
+import { FocusModeProvider } from "@/features/focus/FocusModeProvider";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useNow } from "@/hooks/useNow";
 
@@ -81,9 +82,9 @@ export default function RoomPage() {
   }
 
   return (
-    <>
+    <FocusModeProvider room={state}>
       <ConnectionBanner connection={room.connection} />
       {body}
-    </>
+    </FocusModeProvider>
   );
 }
