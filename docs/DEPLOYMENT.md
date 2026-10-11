@@ -23,14 +23,16 @@ Costs, free tiers and terms change. Check the provider's current pricing page be
 3. Put HTTPS in front. Either terminate TLS in a reverse proxy on the host (for example Caddy, which obtains certificates automatically) forwarding to `127.0.0.1:8080`, or add a TLS server block to `frontend/nginx.conf`. With `ENVIRONMENT=production` the API refuses to start unless `COOKIE_SECURE=true`.
    If you use a host proxy, bind the frontend to localhost only: `HTTP_PORT=127.0.0.1:8080`.
 4. `docker compose up -d --build`
-5. Check: `curl https://your-domain/api/health` should show `"executor_mode": "uid-isolated"`.
+5. Check: `curl https://your-domain/api/v1/health/ready` should return 200 with `"executor_mode": "uid-isolated"` and `"redis": "ok"`.
+
+The stack now includes Redis (shared rate limits, presence, Socket.IO fan-out and judge locks). Production mode refuses to start without `REDIS_URL` and with an SQLite `DATABASE_URL`. To scrape metrics, run Prometheus on the same Docker network and scrape `backend:8000/metrics` (set `METRICS_TOKEN` and use it as a bearer token).
 
 ## Before opening it to the public
 
 - Read [SECURITY.md](SECURITY.md), "What is not protected". Strongly consider running the worker with gVisor (`runtime: runsc` on the worker service) or on a separate machine.
 - Keep the production question bank private if the repository is public.
 - Set up PostgreSQL backups (`docker compose exec db pg_dump -U pyarena pyarena > backup.sql`) and test restoring one.
-- Keep one backend process (see ARCHITECTURE.md, Scaling) unless you add Redis.
+- More than one backend process is supported because Redis is part of the stack (see ARCHITECTURE.md, Scaling). If you put several behind a load balancer, enable sticky sessions or restrict Socket.IO to the WebSocket transport.
 - Watch logs: `docker compose logs -f backend worker`.
 
 ## Updating

@@ -74,13 +74,27 @@ Socket.IO protocol on both ends (`python-socketio` 5 and `socket.io-client` 4). 
 
 ## Scaling
 
-The API is designed to run as **one process** today. These pieces live in that process's memory:
+With `REDIS_URL` set, several API processes (replicas) can run behind one load balancer:
 
-- rate-limit counters,
-- socket presence (who is online),
-- judge queues and timers (the winner decision itself is safe in the database regardless).
+| Concern | Without Redis (one process) | With Redis |
+|---|---|---|
+| Rate limits | in-memory sliding window | Redis fixed window (`SET NX PX` + `INCR` in one transaction); fails open if Redis is down |
+| Socket.IO fan-out | local | `AsyncRedisManager`: an event emitted on any process reaches sockets on every process |
+| Presence (online dots) | local | Redis hash per competition: `user_id -> open sockets` |
+| Judge ordering | one judge loop per competition in the process | Redis lock `judge-lock:{competition_id}`: only one process drains a competition, so strict receipt order holds |
+| Winner | atomic `UPDATE` | unchanged (the database is the authority either way) |
+| Timers and state transitions | compare-and-set `UPDATE`s | unchanged: any process may run them; only one wins each transition |
+| Idempotency keys | database | database |
 
-To run several API processes, move rate limits and presence to Redis, use the python-socketio Redis manager, and run judging with a database-backed job queue (for example `SELECT ... FOR UPDATE SKIP LOCKED`). The judge worker can already be scaled by running more containers behind the same token.
+`tests/test_multi_replica.py` runs two API servers on one Redis, with the host connected to one and the guest to the other, and plays a full match.
+
+Known limits: a crashed process leaves its sockets counted as online until the presence hash expires (12 h idle); Socket.IO's long-polling fallback needs sticky sessions at the load balancer (WebSocket transport does not).
+
+## Observability
+
+- **Logs:** one JSON object per line (`LOG_FORMAT=json`) with `request_id`, `user_id`, `competition_id`, `submission_id` when known. The request id comes from `X-Request-ID` or is generated, and is returned on every response.
+- **Metrics:** Prometheus at `GET /metrics` (internal only). A starter Grafana dashboard is in `docs/observability/grafana-dashboard.json`.
+- **Health:** `/api/v1/health/live` for liveness (Docker `HEALTHCHECK`), `/api/v1/health/ready` for readiness (503 when the database, worker or Redis is down).
 
 ## Frontend structure
 

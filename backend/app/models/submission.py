@@ -26,10 +26,7 @@ class SubmissionStatus(enum.StrEnum):
 
 class Submission(Base):
     __tablename__ = "submissions"
-    __table_args__ = (
-        Index("ix_submissions_competition_id_id", "competition_id", "id"),
-        Index("ix_submissions_user_id_created_at", "user_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_submissions_competition_id_id", "competition_id", "id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -45,3 +42,7 @@ class Submission(Base):
     judged_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
     user: Mapped[User] = relationship(lazy="joined")
+
+
+# "My submissions" lists are newest first per user.
+Index("ix_submissions_user_id_created_at_desc", Submission.user_id, Submission.created_at.desc())

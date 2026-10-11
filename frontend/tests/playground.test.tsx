@@ -71,3 +71,27 @@ describe("PlaygroundPage error details", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("auth: invalid worker token"));
   });
 });
+
+describe("PlaygroundPage idempotency", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("sends a fresh Idempotency-Key with every run", async () => {
+    const keys: string[] = [];
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      if (headers["Idempotency-Key"]) keys.push(headers["Idempotency-Key"]);
+      return jsonResponse({
+        status: "OK", stdout: "", stderr: "", exit_code: 0, duration_ms: 1, truncated: false,
+        error_type: null, kill_reason: null, explanation: null,
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    renderWithApp(<PlaygroundPage />, "/playground");
+    const run = () => userEvent.click(screen.getByRole("button", { name: "Run" }));
+    await run();
+    await waitFor(() => expect(keys).toHaveLength(1));
+    await run();
+    await waitFor(() => expect(keys).toHaveLength(2));
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+});

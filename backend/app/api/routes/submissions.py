@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.database import utcnow
+from app.core.metrics import observe_submission
 from app.dependencies import Ctx, CurrentUser, Session, rate_limit
 from app.repositories.questions import QuestionRepository
 from app.repositories.submissions import SubmissionRepository
@@ -38,6 +39,7 @@ async def submit_practice(
     submission.feedback = outcome.feedback
     submission.judged_at = utcnow()
     await session.commit()
+    observe_submission("practice", submission)
     return SubmissionOut.model_validate(submission)
 
 

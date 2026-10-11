@@ -90,7 +90,8 @@ test("two players race and the server picks one winner", async ({ browser }) => 
   // A wrong answer first: it must not win.
   await setEditorCode(guest.page, "def nothing():\n    return None\n");
   await guest.page.getByRole("button", { name: "Submit" }).click();
-  await expect(guest.page.locator(".verdict")).toContainText(/Wrong answer|Runtime error/);
+  // Judging runs every test in the sandbox; allow for slow CI machines.
+  await expect(guest.page.locator(".verdict")).toContainText(/Wrong answer|Runtime error/, { timeout: 30_000 });
   await snap(guest.page, "arena-wrong");
 
   await guest.page.waitForTimeout(1200); // submission cooldown

@@ -24,7 +24,7 @@ export function mockFetch(routes: Record<string, (body: unknown) => Response>) {
   const fn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "http://localhost");
     const method = init?.method ?? "GET";
-    const path = url.pathname.replace(/^\/api/, "");
+    const path = url.pathname.replace(/^\/api\/v1/, "");
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method, path, body });
     const handler = routes[`${method} ${path}`];

@@ -23,5 +23,5 @@ pids+=($!)
 (cd "$ROOT/frontend" && npm run dev) &
 pids+=($!)
 
-echo "PyArena: http://localhost:5173  (API docs: http://localhost:8000/api/docs)"
+echo "PyArena: http://localhost:5173  (API docs: http://localhost:8000/api/v1/docs)"
 wait

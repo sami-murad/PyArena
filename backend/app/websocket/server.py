@@ -15,6 +15,8 @@ import socketio
 
 from app.core.context import AppContext
 from app.core.errors import ServiceError
+from app.core.logging import new_request_id, start_context
+from app.core.metrics import SOCKET_CONNECTIONS
 from app.repositories.users import UserRepository
 from app.security.tokens import decode_session_token
 from app.websocket import events as ev
@@ -30,9 +32,13 @@ class SocketIOBus:
         await self.sio.emit(event, data, room=room)
 
 
-def create_socket_server(cors_origins: list[str]) -> socketio.AsyncServer:
+def create_socket_server(cors_origins: list[str], redis_url: str = "") -> socketio.AsyncServer:
+    # With Redis, every API process shares one pub/sub channel, so an event
+    # emitted on one process reaches sockets connected to any other.
+    manager = socketio.AsyncRedisManager(redis_url, channel="pyarena-socketio") if redis_url else None
     return socketio.AsyncServer(
         async_mode="asgi",
+        client_manager=manager,
         cors_allowed_origins=cors_origins,
         ping_interval=20,
         ping_timeout=20,
@@ -55,6 +61,8 @@ def register_handlers(sio: socketio.AsyncServer, ctx: AppContext) -> None:
     async def current_user(sid: str) -> Any:
         session = await sio.get_session(sid)
         user_id = session.get("user_id")
+        # Every socket event gets its own log context, like an HTTP request.
+        start_context(request_id=new_request_id(), user_id=user_id)
         async with ctx.db.sessionmaker() as s:
             return await UserRepository(s).get(user_id) if user_id else None
 
@@ -69,13 +77,17 @@ def register_handlers(sio: socketio.AsyncServer, ctx: AppContext) -> None:
         if user_id is None:
             raise socketio.exceptions.ConnectionRefusedError("authentication required")
         await sio.save_session(sid, {"user_id": user_id})
+        SOCKET_CONNECTIONS.inc()
 
     @sio.event
     async def disconnect(sid: str, *args: Any) -> None:
         session = await sio.get_session(sid)
         user_id = session.get("user_id")
+        if user_id is not None:
+            SOCKET_CONNECTIONS.dec()
+        start_context(request_id=new_request_id(), user_id=user_id)
         for cid in ctx.presence.rooms_of(sid):
-            gone = ctx.presence.remove(cid, user_id, sid)
+            gone = await ctx.presence.remove(cid, user_id, sid)
             if gone:
                 await sio.emit(
                     ev.PLAYER_DISCONNECTED, {"competition_id": cid, "user_id": user_id}, room=ev.competition_room(cid)
@@ -95,7 +107,7 @@ def register_handlers(sio: socketio.AsyncServer, ctx: AppContext) -> None:
             await error(sid, exc.message)
             return {"ok": False, "error": exc.message}
         await sio.enter_room(sid, ev.competition_room(cid))
-        ctx.presence.add(cid, user.id, sid)
+        await ctx.presence.add(cid, user.id, sid)
         await service.broadcast_state(cid)
         return {"ok": True, "state": state.model_dump(mode="json")}
 
@@ -110,7 +122,7 @@ def register_handlers(sio: socketio.AsyncServer, ctx: AppContext) -> None:
         except ServiceError as exc:
             return {"ok": False, "error": exc.message}
         await sio.leave_room(sid, ev.competition_room(cid))
-        ctx.presence.remove(cid, user.id, sid)
+        await ctx.presence.remove(cid, user.id, sid)
         await service.broadcast_state(cid)
         return {"ok": True}
 

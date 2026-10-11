@@ -26,7 +26,7 @@ class SubmissionRepository:
         stmt = select(Submission).where(Submission.user_id == user_id)
         if question_id is not None:
             stmt = stmt.where(Submission.question_id == question_id)
-        stmt = stmt.order_by(Submission.id.desc()).limit(limit)
+        stmt = stmt.order_by(Submission.created_at.desc(), Submission.id.desc()).limit(limit)
         return list((await self.session.execute(stmt)).scalars())
 
     async def for_competition(self, competition_id: int) -> list[Submission]:

@@ -49,10 +49,26 @@ def utcnow() -> datetime:
 
 
 class Database:
-    def __init__(self, url: str, echo: bool = False) -> None:
+    def __init__(
+        self,
+        url: str,
+        echo: bool = False,
+        pool_size: int = 10,
+        max_overflow: int = 10,
+        pool_timeout: float = 10.0,
+        pool_recycle: int = 1800,
+    ) -> None:
         kwargs: dict[str, object] = {"echo": echo}
         if not url.startswith("sqlite"):
-            kwargs.update(pool_pre_ping=True, pool_size=10, max_overflow=10)
+            # pool_pre_ping drops connections the database closed (restarts, idle
+            # timeouts); pool_recycle replaces long-lived ones before proxies cut them.
+            kwargs.update(
+                pool_pre_ping=True,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=pool_timeout,
+                pool_recycle=pool_recycle,
+            )
         self.engine: AsyncEngine = create_async_engine(url, **kwargs)
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False, class_=AsyncSession)
 

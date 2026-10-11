@@ -1,6 +1,8 @@
 # API
 
-Base path `/api`. Interactive documentation (development only): http://localhost:8000/api/docs.
+Base path **`/api/v1`**. Interactive documentation (development only): http://localhost:8000/api/v1/docs.
+
+The original unversioned paths (`/api/...`) still work but are deprecated: they are hidden from the OpenAPI schema and every response carries `Deprecation: true` and `Link: </api/v1/...>; rel="successor-version"`. The frontend uses `/api/v1` only. The Socket.IO path is unchanged (`/socket.io`).
 
 ## Conventions
 
@@ -8,6 +10,9 @@ Base path `/api`. Interactive documentation (development only): http://localhost
 - **Authentication:** an httpOnly, `SameSite=Lax` cookie (`pyarena_session`) set by register/login. Send requests with credentials (`fetch(..., {credentials: "include"})`).
 - **CSRF:** POST/PUT/DELETE requests whose `Origin` header is not an allowed origin are rejected with 403.
 - **Object-level authorization:** other users' snippets, submissions and rooms you are not in return 404, the same as missing ones.
+
+- **Request ids:** every response has `X-Request-ID`. Send your own (8-64 letters, digits, `.`, `_`, `-`) to correlate with your logs; otherwise the server generates one. The same id appears on every server log line for that request.
+- **Idempotency:** `POST /execute`, `POST /submissions` and `POST /competitions/{id}/submissions` accept an `Idempotency-Key` header (8-128 letters, digits, `_ . : -`). A repeat with the same key returns the stored response with `Idempotent-Replayed: true` instead of running again (a retried competition submission is never created twice). Same key with a different body: `422 key_reused`. Same key while the first is still running: `409 in_flight`. Only 2xx responses are stored, for `IDEMPOTENCY_TTL_HOURS` (default 24). Keys are scoped to the signed-in user (or IP for guests).
 
 ## Status codes
 
@@ -17,8 +22,9 @@ Base path `/api`. Interactive documentation (development only): http://localhost
 | 401 | Not signed in |
 | 403 | Signed in but not allowed (not host, left the room, cross-site request) |
 | 404 | Not found, or not yours |
-| 409 | Conflict with the current state (room full, already started, previous submission pending) |
-| 422 | Invalid input (sizes, formats) |
+| 400 | Malformed `Idempotency-Key` |
+| 409 | Conflict with the current state (room full, already started, previous submission pending, same Idempotency-Key still in flight) |
+| 422 | Invalid input (sizes, formats), or an Idempotency-Key reused for a different request |
 | 429 | Rate limited; see `Retry-After` |
 | 503 | The judge worker is unavailable |
 
@@ -35,7 +41,25 @@ Base path `/api`. Interactive documentation (development only): http://localhost
 ## Endpoints
 
 ### Health
-`GET /health` → `{"status": "ok"|"degraded", "checks": {"database": "ok", "executor": "ok", "executor_mode": "uid-isolated"}}`
+| Path | Use | Response |
+|---|---|---|
+| `GET /health/live` | liveness: the process is serving | always `200 {"status": "ok"}` |
+| `GET /health/ready` | readiness: dependencies reachable | `200` or `503` with `{"status", "checks": {"database", "executor", "executor_mode", "redis"}}`; `redis` is `not_configured` without `REDIS_URL` |
+| `GET /health` | original combined check (compatibility) | always `200`, `status` is `ok` or `degraded` |
+
+### Metrics
+`GET /metrics` (no `/api` prefix; not proxied by nginx, so only reachable on the internal network). Prometheus text format. If `METRICS_TOKEN` is set, send `Authorization: Bearer <token>`.
+
+| Metric | Type | Labels |
+|---|---|---|
+| `pyarena_judge_queue_depth` | gauge | |
+| `pyarena_sandbox_kills_total` | counter | `reason` (oom, cpu, wall, output, signal) |
+| `pyarena_submission_latency_seconds` | histogram | `kind` (practice, competition), `status` |
+| `pyarena_active_competitions` | gauge | `status` (WAITING, COUNTDOWN, RUNNING) |
+| `pyarena_socket_connections` | gauge | per process |
+| `pyarena_http_requests_total` / `pyarena_http_request_duration_seconds` | counter / histogram | `method`, `route` (template), `status` |
+| `pyarena_executor_unavailable_total` | counter | `reason` |
+| `pyarena_idempotent_replays_total` | counter | |
 
 ### Auth
 | Method | Path | Body | Returns |

@@ -20,4 +20,4 @@ cd '$Root\backend'; .\.venv\Scripts\alembic.exe upgrade head; .\.venv\Scripts\py
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$Root\frontend'; npm run dev"
 
-Write-Host "PyArena: http://localhost:5173  (API docs: http://localhost:8000/api/docs)"
+Write-Host "PyArena: http://localhost:5173  (API docs: http://localhost:8000/api/v1/docs)"

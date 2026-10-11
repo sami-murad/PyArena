@@ -2,7 +2,7 @@
 #
 # Networks are the trust boundaries:
 #   web    nginx <-> API (only nginx publishes a port)
-#   data   API <-> PostgreSQL (the worker is NOT on this network)
+#   data   API <-> PostgreSQL and Redis (the worker is NOT on this network)
 #   judge  API <-> judge worker; "internal" = no route to the internet
 #
 # Copy .env.example to .env and set real secrets before running.
@@ -20,6 +20,19 @@ services:
     networks: [data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Shared rate limits, presence and Socket.IO fan-out. Nothing here needs to
+    # survive a restart, so persistence is off.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru"]
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -54,18 +67,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       worker:
         condition: service_started
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pyarena}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-pyarena}
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      REDIS_URL: redis://redis:6379/0
       WORKER_URL: http://worker:8001
       WORKER_TOKEN: ${WORKER_TOKEN}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       CORS_ORIGINS: ${PUBLIC_URL:-http://localhost:8080}
       TRUST_PROXY_HEADERS: "true"
       COMPETITION_MIN_PLAYERS: ${COMPETITION_MIN_PLAYERS:-2}
+      LOG_FORMAT: json
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     networks: [web, data, judge]
 
   frontend:

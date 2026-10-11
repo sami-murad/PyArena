@@ -15,6 +15,8 @@ export const appConfig = {
   /** Empty string means "same origin" (Vite proxy in dev, nginx in Docker). */
   apiBaseUrl: (env.VITE_API_BASE_URL ?? "").replace(/\/$/, ""),
   socketUrl: (env.VITE_SOCKET_URL ?? "").replace(/\/$/, ""),
+  /** Versioned API path; the unversioned /api/... aliases are deprecated. */
+  apiPrefix: "/api/v1",
   /** Client-side limits mirror the backend's defaults; the server re-checks everything. */
   maxCodeChars: numberFrom(env.VITE_MAX_CODE_CHARS, 20_000),
   maxStdinChars: numberFrom(env.VITE_MAX_STDIN_CHARS, 10_000),

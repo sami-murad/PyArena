@@ -1,4 +1,4 @@
-# Development services only: PostgreSQL and the judge worker in Docker, while
+# Development services only: PostgreSQL, Redis and the judge worker in Docker, while
 # you run the backend (venv) and frontend (npm run dev) on your machine.
 #
 #   docker compose -f docker-compose.dev.yml up -d
@@ -19,6 +19,17 @@ services:
       - pgdata-dev:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pyarena -d pyarena"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20

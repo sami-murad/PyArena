@@ -33,6 +33,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import Settings
 from app.core.database import utcnow
 from app.core.errors import ServiceError, conflict, forbidden, not_found, too_many
+from app.core.locks import JudgeLock, LocalJudgeLock
+from app.core.logging import bind
+from app.core.metrics import observe_submission
 from app.core.rate_limit import RateLimiter
 from app.models import (
     Competition,
@@ -79,6 +82,8 @@ class CompetitionService:
         bus: EventBus,
         presence: Presence,
         limiter: RateLimiter,
+        judge_lock: JudgeLock | None = None,
+        maintenance: list[Callable[[], Awaitable[object]]] | None = None,
     ) -> None:
         self.sm = sessionmaker
         self.settings = settings
@@ -86,6 +91,8 @@ class CompetitionService:
         self.bus = bus
         self.presence = presence
         self.limiter = limiter
+        self.judge_lock: JudgeLock = judge_lock or LocalJudgeLock()
+        self.maintenance = maintenance or []
         self._judge_loops: dict[int, asyncio.Task[None]] = {}
         self._dirty: dict[int, bool] = {}
         self._timers: dict[int, list[asyncio.Task[None]]] = defaultdict(list)
@@ -124,6 +131,8 @@ class CompetitionService:
         for cid in ids:
             await self.refresh(cid)
             await self._kick_if_pending(cid)
+        for task in self.maintenance:
+            await task()
 
     # ================================================================ commands
     async def create(self, user: User, req: CreateCompetitionRequest) -> int:
@@ -313,7 +322,7 @@ class CompetitionService:
                 if await subs.count_pending(cid, user.id):
                     raise conflict("Your previous submission is still being judged.", "pending")
                 retry = (
-                    self.limiter.hit(f"cooldown:{cid}:{user.id}", 1, self.settings.submission_cooldown_seconds)
+                    await self.limiter.hit(f"cooldown:{cid}:{user.id}", 1, self.settings.submission_cooldown_seconds)
                     if self.settings.submission_cooldown_seconds > 0
                     else None
                 )
@@ -488,22 +497,39 @@ class CompetitionService:
             await asyncio.shield(task)
 
     async def _judge_loop(self, cid: int) -> None:
-        try:
-            while True:
-                self._dirty[cid] = False
-                await self._drain(cid)
-                # No await between this check and the removal below, so a
-                # submission kicked during _drain is never stranded.
-                if not self._dirty.get(cid):
-                    break
-        except Exception:
-            log.exception("judge loop crashed for competition %s", cid)
-        finally:
-            self._judge_loops.pop(cid, None)
-        await self.refresh(cid)
+        with bind(competition_id=cid):
+            # Across several API processes only the lock holder judges this
+            # competition, which keeps the strict receipt-order rule. Others
+            # skip; the holder (or the sweeper, once the lock expires) picks up
+            # any submission they received.
+            token = await self.judge_lock.acquire(cid)
+            if token is None:
+                self._judge_loops.pop(cid, None)
+                log.info("another process is judging this competition")
+                # If the holder finishes just before seeing our submission, we
+                # take over on the next attempt instead of waiting for the sweeper.
+                self._schedule(cid, utcnow().timestamp() + 1.0, self._kick_if_pending)
+                return
+            try:
+                while True:
+                    self._dirty[cid] = False
+                    await self._drain(cid, token)
+                    # No await between this check and the removal below, so a
+                    # submission kicked during _drain is never stranded.
+                    if not self._dirty.get(cid):
+                        break
+            except Exception:  # keep the service alive; the sweeper retries pending work
+                log.exception("judge loop crashed")
+            finally:
+                self._judge_loops.pop(cid, None)
+                await self.judge_lock.release(cid, token)
+            await self.refresh(cid)
 
-    async def _drain(self, cid: int) -> None:
+    async def _drain(self, cid: int, token: str) -> None:
         while True:
+            if not await self.judge_lock.refresh(cid, token):
+                log.warning("lost the judge lock; another process continues")
+                return
             async with self.sm() as s:
                 comp = await CompetitionRepository(s).get(cid)
                 subs = SubmissionRepository(s)
@@ -526,20 +552,23 @@ class CompetitionService:
                 sub_id, sub_user, sub_code, sub_created = pending.id, pending.user_id, pending.code, pending.created_at
                 username = pending.user.username
 
-            outcome = await self.judge.judge(question, sub_code, tests)
+            with bind(submission_id=sub_id, user_id=sub_user):
+                outcome = await self.judge.judge(question, sub_code, tests)
 
-            won = False
-            async with self.sm() as s:
-                submission = await SubmissionRepository(s).get(sub_id)
-                assert submission is not None
-                submission.status = outcome.status
-                submission.passed_count = outcome.passed
-                submission.total_count = outcome.total
-                submission.feedback = outcome.feedback
-                submission.judged_at = utcnow()
-                if outcome.status == SubmissionStatus.ACCEPTED:
-                    won = await CompetitionRepository(s).claim_winner(cid, sub_id, sub_user, sub_created)
-                await s.commit()
+                won = False
+                async with self.sm() as s:
+                    submission = await SubmissionRepository(s).get(sub_id)
+                    assert submission is not None
+                    submission.status = outcome.status
+                    submission.passed_count = outcome.passed
+                    submission.total_count = outcome.total
+                    submission.feedback = outcome.feedback
+                    submission.judged_at = utcnow()
+                    if outcome.status == SubmissionStatus.ACCEPTED:
+                        won = await CompetitionRepository(s).claim_winner(cid, sub_id, sub_user, sub_created)
+                    await s.commit()
+                observe_submission("competition", submission)
+                log.info("submission judged: %s", outcome.status, extra={"won": won})
 
             await self.bus.emit(
                 ev.SUBMISSION_RESULT,
@@ -615,7 +644,7 @@ class CompetitionService:
 
     async def _snapshot(self, s: AsyncSession, comp: Competition) -> CompetitionState:
         submissions = await SubmissionRepository(s).for_competition(comp.id)
-        online = self.presence.online(comp.id)
+        online = await self.presence.online(comp.id)
         participants = [
             ParticipantOut(
                 user_id=p.user_id,

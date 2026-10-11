@@ -21,6 +21,6 @@ USER pyarena
 
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2)"
 
 ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -29,6 +29,25 @@ class Settings(BaseSettings):
     # --- Database -------------------------------------------------------
     database_url: str = "postgresql+asyncpg://pyarena:pyarena@localhost:5432/pyarena"
     database_echo: bool = False
+    # Connection pool (PostgreSQL only; SQLite ignores these).
+    db_pool_size: int = Field(10, ge=1, le=100)
+    db_max_overflow: int = Field(10, ge=0, le=100)
+    db_pool_timeout_seconds: float = Field(10.0, gt=0)
+    db_pool_recycle_seconds: int = Field(1800, ge=60)
+
+    # --- Shared state ---------------------------------------------------
+    # redis://host:6379/0. Empty = in-process memory (single backend process only).
+    redis_url: str = ""
+
+    # --- Observability ----------------------------------------------------
+    log_format: Literal["json", "text"] = "json"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    metrics_enabled: bool = True
+    # When set, GET /metrics requires "Authorization: Bearer <token>".
+    metrics_token: str = ""
+
+    # --- Idempotency ------------------------------------------------------
+    idempotency_ttl_hours: int = Field(24, ge=1, le=168)
 
     # --- Security -------------------------------------------------------
     secret_key: str = DEV_SECRET
@@ -83,6 +102,10 @@ class Settings(BaseSettings):
                 problems.append("WORKER_TOKEN must be a random value of at least 24 characters")
             if not self.cookie_secure:
                 problems.append("COOKIE_SECURE must be true in production (HTTPS)")
+            if self.is_sqlite:
+                problems.append("DATABASE_URL must point to PostgreSQL in production (SQLite is for development)")
+            if not self.redis_url:
+                problems.append("REDIS_URL must be set in production (shared rate limits, presence and sockets)")
             if problems:
                 raise ValueError("Unsafe production configuration: " + "; ".join(problems))
         return self

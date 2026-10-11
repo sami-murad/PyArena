@@ -85,6 +85,17 @@ cd frontend && npx playwright install chromium && npm run test:e2e
 
 The worker's isolation tests only run when the worker runs as root (as in Docker); otherwise they are skipped.
 
+Each end-to-end run creates new accounts, and sign-ups are limited to `RATE_REGISTER_PER_HOUR` (20) per IP. With `REDIS_URL` set, that counter is kept in Redis and survives backend restarts, so after several runs sign-up answers "Too many requests". For local testing set `RATE_LIMIT_ENABLED=false`, or clear the counter: `redis-cli DEL pyarena:rl:register:ip:127.0.0.1`.
+
+Redis-dependent backend tests use `fakeredis` by default. Point them at a real Redis to also run the real-server variants and the two-replica match:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d redis
+REDIS_TEST_URL=redis://127.0.0.1:6379/15 .venv/bin/python -m pytest
+```
+
+`REDIS_TEST_URL` databases are flushed by the tests; never point it at data you need.
+
 The backend tests execute code through the real worker sandbox (imported from `judge-worker/`), so they need no running services. `tests/test_socket.py` starts a real uvicorn server on a free port and connects two Socket.IO clients.
 
 ## Adding a question

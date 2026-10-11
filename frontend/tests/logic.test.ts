@@ -1,7 +1,7 @@
 import { safeRedirect } from "@/features/auth/LoginPage";
 import { validateRegistration } from "@/features/auth/RegisterPage";
 import { validateRun } from "@/features/playground/services/executionService";
-import { api, ApiError } from "@/services/apiClient";
+import { api, ApiError, newIdempotencyKey } from "@/services/apiClient";
 import { formatClock, formatDuration, formatSeconds } from "@/utils/format";
 import { jsonResponse } from "./helpers";
 
@@ -37,9 +37,17 @@ describe("apiClient", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(api.post("/execute", { code: "x" })).resolves.toEqual({ ok: 1 });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("/api/execute");
+    expect(url).toBe("/api/v1/execute");
     expect(init.credentials).toBe("include");
     expect(init.headers).toEqual({ "Content-Type": "application/json" });
+  });
+
+  it("sends an Idempotency-Key when given one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.post("/competitions/1/submissions", { code: "x" }, { idempotencyKey: "click-123456" });
+    expect(fetchMock.mock.calls[0][1].headers["Idempotency-Key"]).toBe("click-123456");
+    expect(newIdempotencyKey()).not.toBe(newIdempotencyKey());
   });
 
   it("turns server errors into readable messages", async () => {
@@ -48,6 +56,17 @@ describe("apiClient", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.message).toBe("Room is full.");
     expect(err.code).toBe("full");
+  });
+
+  it("keeps the server's request id for error reports", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ detail: "boom" }), { status: 500, headers: { "X-Request-ID": "req-abc-123" } }),
+      ),
+    );
+    const err = (await api.get("/x").catch((e: unknown) => e)) as ApiError;
+    expect(err.requestId).toBe("req-abc-123");
   });
 
   it("explains FastAPI validation errors", async () => {

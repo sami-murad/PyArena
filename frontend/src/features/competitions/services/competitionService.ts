@@ -1,4 +1,4 @@
-import { api } from "@/services/apiClient";
+import { api, newIdempotencyKey } from "@/services/apiClient";
 import type {
   CompetitionListItem,
   CompetitionResults,
@@ -22,7 +22,9 @@ export const competitionService = {
   start: (id: number) => api.post<CompetitionState>(`/competitions/${id}/start`),
   leave: (id: number) => api.post<void>(`/competitions/${id}/leave`),
   cancel: (id: number) => api.post<CompetitionState>(`/competitions/${id}/cancel`),
-  submit: (id: number, code: string) => api.post<Submission>(`/competitions/${id}/submissions`, { code }),
+  /** Pass the same key when retrying the same click, so the server creates one submission. */
+  submit: (id: number, code: string, idempotencyKey: string = newIdempotencyKey()) =>
+    api.post<Submission>(`/competitions/${id}/submissions`, { code }, { idempotencyKey }),
   results: (id: number, signal?: AbortSignal) => api.get<CompetitionResults>(`/competitions/${id}/results`, signal),
   submission: (id: number) => api.get<Submission>(`/submissions/${id}`),
 };

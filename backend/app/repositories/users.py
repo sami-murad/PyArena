@@ -11,10 +11,12 @@ class UserRepository:
         self.session = session
 
     async def get(self, user_id: int) -> User | None:
-        return await self.session.get(User, user_id)
+        """Active users only: a soft-deleted account behaves as if it does not exist."""
+        user = await self.session.get(User, user_id)
+        return user if user is not None and user.deleted_at is None else None
 
     async def by_login(self, login: str) -> User | None:
-        stmt = select(User).where(or_(User.username == login, User.email == login.lower()))
+        stmt = select(User).where(or_(User.username == login, User.email == login.lower()), User.deleted_at.is_(None))
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def exists(self, username: str, email: str) -> tuple[bool, bool]:

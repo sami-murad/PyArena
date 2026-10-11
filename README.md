@@ -2,7 +2,7 @@
 
 **Code. Compete. Improve.** PyArena is a Python playground that runs code in a sandbox, plus private rooms where friends get the same problem at the same moment and the first correct solution wins.
 
-Built with React, TypeScript, Vite and Monaco on the front end, and FastAPI, SQLAlchemy, PostgreSQL and Socket.IO on the back end. User code runs in a separate judge worker, never in the web server.
+Built with React, TypeScript, Vite and Monaco on the front end, and FastAPI, SQLAlchemy, PostgreSQL, Redis and Socket.IO on the back end. User code runs in a separate judge worker, never in the web server.
 
 ## Features
 
@@ -30,6 +30,8 @@ Built with React, TypeScript, Vite and Monaco on the front end, and FastAPI, SQL
 
 **Accounts**: Argon2id password hashing, httpOnly session cookies, profile statistics.
 
+**Operations**: versioned API (`/api/v1`), JSON logs with request ids, Prometheus metrics at `/metrics`, liveness and readiness checks, `Idempotency-Key` support on run and submit, and several API processes sharing state through Redis.
+
 ## Quick start
 
 You need **Python 3.12+**, **Node.js 20+** and **Docker** (Docker Desktop on Windows/macOS).
@@ -50,7 +52,7 @@ cd backend; .\.venv\Scripts\alembic.exe upgrade head; .\.venv\Scripts\python.exe
 powershell -ExecutionPolicy Bypass -File scripts\dev.ps1
 ```
 
-Open http://localhost:5173. API docs are at http://localhost:8000/api/docs.
+Open http://localhost:5173. API docs are at http://localhost:8000/api/v1/docs. Readiness: http://localhost:8000/api/v1/health/ready. The dev compose file also starts Redis on `127.0.0.1:6379`; set `REDIS_URL=redis://localhost:6379/0` in `backend/.env` to use it (optional in development).
 
 **Everything in Docker instead:** `docker compose up --build`, then open http://localhost:8080. The setup script already created `.env` with random secrets.
 
@@ -104,6 +106,8 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for linting, type checking and ru
 - [Development](docs/DEVELOPMENT.md): setup, running without Docker, testing
 - [Deployment](docs/DEPLOYMENT.md): running on a server
 - [Design tokens](docs/DESIGN_TOKENS.md): colour and theme strategy
+- [Observability](docs/observability/README.md): metrics, Prometheus and the Grafana dashboard
+- [Decision records](docs/adr/): why the custom judge worker, Redis and `/api/v1`
 
 ## License
 

@@ -18,3 +18,5 @@ class SavedSnippet(Base):
     stdin: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
+    # Soft delete: deleting hides the snippet everywhere but keeps it recoverable.
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
@@ -10,13 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.core.context import AppContext
+from app.core.logging import set_fields
 from app.models import User
 from app.repositories.users import UserRepository
 from app.security.tokens import decode_session_token
 
 
 def get_ctx(request: Request) -> AppContext:
-    return request.app.state.ctx  # type: ignore[no-any-return]
+    ctx = request.app.state.ctx
+    if not isinstance(ctx, AppContext):
+        raise RuntimeError("application context is not configured")
+    return ctx
 
 
 def get_settings_dep(ctx: Annotated[AppContext, Depends(get_ctx)]) -> Settings:
@@ -37,7 +41,10 @@ async def get_optional_user(request: Request, ctx: Ctx, session: Session) -> Use
     user_id = decode_session_token(token, ctx.settings)
     if user_id is None:
         return None
-    return await UserRepository(session).get(user_id)
+    user = await UserRepository(session).get(user_id)
+    if user is not None:
+        set_fields(user_id=user.id)  # appears on every log line of this request
+    return user
 
 
 async def get_current_user(user: Annotated[User | None, Depends(get_optional_user)]) -> User:
@@ -59,13 +66,15 @@ def client_ip(request: Request, settings: Settings) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def rate_limit(bucket: str, limit_attr: str, window_seconds: float, per_user: bool = False) -> Callable[..., None]:
+def rate_limit(
+    bucket: str, limit_attr: str, window_seconds: float, per_user: bool = False
+) -> Callable[..., Awaitable[None]]:
     """Build a dependency that limits requests per IP (or per user when signed in)."""
 
-    def dependency(request: Request, ctx: Ctx, user: OptionalUser) -> None:
+    async def dependency(request: Request, ctx: Ctx, user: OptionalUser) -> None:
         limit = int(getattr(ctx.settings, limit_attr))
         key = f"{bucket}:user:{user.id}" if (per_user and user) else f"{bucket}:ip:{client_ip(request, ctx.settings)}"
-        retry = ctx.limiter.hit(key, limit, window_seconds)
+        retry = await ctx.limiter.hit(key, limit, window_seconds)
         if retry is not None:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

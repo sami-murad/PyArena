@@ -50,10 +50,15 @@ All submitted Python is treated as hostile. It never runs in the API process. Th
 | Secret leakage | Secrets only in environment variables; the app refuses to start in production with placeholder secrets or insecure cookies; the frontend bundle contains only public settings |
 | Clickjacking, MIME sniffing | `X-Frame-Options: DENY`, CSP `frame-ancestors 'none'`, `nosniff` (nginx) |
 
+| Duplicate actions from retries | `Idempotency-Key` on execute and submissions; stored responses are scoped per user (or IP), so one user can never read another's stored response; only 2xx responses are stored |
+| Information leaks through operations endpoints | `/metrics` is not proxied by nginx and can require `METRICS_TOKEN`; `/health/ready` reports only up/down per dependency |
+
 ### Known limitations
 
 - Sessions are stateless JWTs. Logging out deletes the cookie, but a copied token stays valid until it expires (`SESSION_DAYS`). A server-side session table would allow revocation.
-- Rate limits and presence are per process (see ARCHITECTURE.md, Scaling).
+- Without `REDIS_URL`, rate limits and presence are per process (see ARCHITECTURE.md, Scaling). Production refuses to start without Redis.
+- The Redis rate limiter fails open: if Redis is unreachable, requests are allowed (and a warning is logged) rather than blocking the whole site. Monitor Redis health.
+- Fixed-window rate limiting allows up to twice the limit across a window boundary.
 - No email verification or password reset yet.
 - The Content-Security-Policy allows inline styles because the Monaco editor needs them.
 

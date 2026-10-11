@@ -5,12 +5,15 @@ import { websitesInfo } from "@/config/websitesInfo";
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | null;
+  /** The server's X-Request-ID, to quote when reporting a problem. */
+  readonly requestId: string | null;
 
-  constructor(status: number, message: string, code: string | null = null) {
+  constructor(status: number, message: string, code: string | null = null, requestId: string | null = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.requestId = requestId;
   }
 
   get isNetwork(): boolean {
@@ -24,6 +27,19 @@ interface RequestOptions {
   method?: Method;
   body?: unknown;
   signal?: AbortSignal;
+  /** Sent as Idempotency-Key so a retried request is never applied twice. */
+  idempotencyKey?: string;
+}
+
+export interface PostOptions {
+  signal?: AbortSignal;
+  idempotencyKey?: string;
+}
+
+/** A fresh key for one user action (one click on Run or Submit). */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function messageFrom(status: number, payload: unknown): string {
@@ -43,7 +59,10 @@ function messageFrom(status: number, payload: unknown): string {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, signal } = options;
+  const { method = "GET", body, signal, idempotencyKey } = options;
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   const timeout = new AbortController();
   const timer = window.setTimeout(() => timeout.abort(), appConfig.requestTimeoutMs);
   const onAbort = () => timeout.abort();
@@ -51,10 +70,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   let response: Response;
   try {
-    response = await fetch(`${appConfig.apiBaseUrl}/api${path}`, {
+    response = await fetch(`${appConfig.apiBaseUrl}${appConfig.apiPrefix}${path}`, {
       method,
       credentials: "include",
-      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      headers: Object.keys(headers).length ? headers : undefined,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: timeout.signal,
     });
@@ -78,16 +97,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     }
   }
   if (!response.ok) {
-    const code = payload && typeof payload === "object" && "code" in payload ? String((payload as { code: unknown }).code) : null;
-    throw new ApiError(response.status, messageFrom(response.status, payload), code);
+    const code =
+      payload && typeof payload === "object" && "code" in payload ? String((payload as { code: unknown }).code) : null;
+    throw new ApiError(response.status, messageFrom(response.status, payload), code, response.headers.get("x-request-id"));
   }
   return payload as T;
 }
 
 export const api = {
   get: <T>(path: string, signal?: AbortSignal) => apiRequest<T>(path, { signal }),
-  post: <T>(path: string, body?: unknown, signal?: AbortSignal) =>
-    apiRequest<T>(path, { method: "POST", body: body ?? {}, signal }),
+  post: <T>(path: string, body?: unknown, options: PostOptions = {}) =>
+    apiRequest<T>(path, { method: "POST", body: body ?? {}, ...options }),
   put: <T>(path: string, body: unknown) => apiRequest<T>(path, { method: "PUT", body }),
   delete: <T = void>(path: string) => apiRequest<T>(path, { method: "DELETE" }),
 };

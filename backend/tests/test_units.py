@@ -1,7 +1,7 @@
 import pytest
 
 from app.config import Settings
-from app.core.rate_limit import RateLimiter
+from app.core.rate_limit import MemoryRateLimiter
 from app.execution.explanations import explain
 from app.repositories.competitions import CODE_ALPHABET, CODE_LENGTH, generate_room_code
 from app.services.judge import describe_call, normalize_stdout, py_repr, values_equal
@@ -52,13 +52,13 @@ def test_explanations() -> None:
         assert explain("RUNTIME_ERROR", name, "") is not None
 
 
-def test_rate_limiter_window() -> None:
-    limiter = RateLimiter()
-    assert limiter.hit("k", 2, 60) is None
-    assert limiter.hit("k", 2, 60) is None
-    assert limiter.hit("k", 2, 60) is not None
-    assert limiter.hit("other", 2, 60) is None
-    assert RateLimiter(enabled=False).hit("k", 0, 60) is None
+async def test_rate_limiter_window() -> None:
+    limiter = MemoryRateLimiter()
+    assert await limiter.hit("k", 2, 60) is None
+    assert await limiter.hit("k", 2, 60) is None
+    assert await limiter.hit("k", 2, 60) is not None
+    assert await limiter.hit("other", 2, 60) is None
+    assert await MemoryRateLimiter(enabled=False).hit("k", 0, 60) is None
 
 
 def test_room_codes_are_random_and_unambiguous() -> None:
@@ -77,6 +77,7 @@ def test_production_refuses_insecure_defaults() -> None:
         secret_key="x" * 40,
         worker_token="y" * 30,
         cookie_secure=True,
+        redis_url="redis://redis:6379/0",
         cors_origins="https://a.example, https://b.example/",
     )
     assert ok.cors_origins == ["https://a.example", "https://b.example"]
