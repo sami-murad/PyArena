@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     worker_url: str = "http://localhost:8001"
     worker_token: str = DEV_WORKER_TOKEN
     worker_timeout_seconds: float = 20.0
+    worker_connect_timeout_seconds: float = 3.0
     max_code_chars: int = 20_000
     max_stdin_chars: int = 10_000
     playground_cpu_seconds: float = 2.0

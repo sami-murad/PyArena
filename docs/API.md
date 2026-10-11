@@ -62,6 +62,18 @@ Base path `/api`. Interactive documentation (development only): http://localhost
 ```
 `status` is one of `OK, SYNTAX_ERROR, RUNTIME_ERROR, TIMEOUT, MEMORY_LIMIT, OUTPUT_LIMIT`. `explanation` is `{title, summary, tips[], line}` for recognised errors.
 
+`kill_reason` says why the sandbox stopped the program, or is `null` when it ended on its own:
+
+| Value | Meaning |
+|---|---|
+| `oom` | memory limit (MemoryError, crash from exhausted memory, or killed by the memory cgroup) |
+| `cpu` | CPU time limit |
+| `wall` | wall-clock limit, e.g. sleeping or waiting for input |
+| `output` | printed more than the output cap |
+| `signal` | another fatal signal |
+
+When the judge worker is unavailable the response is 503. Outside production the message ends with the cause, for example `(auth: invalid worker token)` or `(unreachable: cannot connect to http://localhost:8001)`.
+
 ### Questions
 | GET | `/questions?difficulty=easy` | list `{id, slug, title, difficulty, mode}` |
 |---|---|---|

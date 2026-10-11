@@ -11,12 +11,15 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import platform
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from .sandbox import Limits, Sandbox
+from .sandbox import ENV_WHITELIST, IS_POSIX, Limits, Sandbox
 
 log = logging.getLogger("pyarena.worker")
 
@@ -62,7 +65,19 @@ class CallRequest(BaseModel):
     limits: LimitsIn = Field(default_factory=LimitsIn)
 
 
-def create_app(sandbox: Sandbox | None = None, token: str | None = None) -> FastAPI:
+def _diag_enabled() -> bool:
+    return os.getenv("WORKER_ENABLE_DIAG", "false").strip().lower() in ("1", "true", "yes")
+
+
+def _cgroup_version() -> str:
+    if Path("/sys/fs/cgroup/cgroup.controllers").exists():
+        return "v2"
+    if Path("/sys/fs/cgroup/memory").exists():
+        return "v1"
+    return "unknown"
+
+
+def create_app(sandbox: Sandbox | None = None, token: str | None = None, enable_diag: bool | None = None) -> FastAPI:
     box = sandbox or Sandbox(
         ceiling=_ceiling_from_env(),
         max_concurrent=int(os.getenv("WORKER_MAX_CONCURRENT_JOBS", "4")),
@@ -71,6 +86,8 @@ def create_app(sandbox: Sandbox | None = None, token: str | None = None) -> Fast
     secret = token if token is not None else os.getenv("WORKER_TOKEN", "")
     if not secret:
         raise RuntimeError("WORKER_TOKEN must be set (shared secret between backend and worker).")
+
+    diag = _diag_enabled() if enable_diag is None else enable_diag
 
     app = FastAPI(title="PyArena Judge Worker", docs_url=None, redoc_url=None, openapi_url=None)
     log.warning("Judge worker sandbox mode: %s", box.mode)
@@ -92,5 +109,27 @@ def create_app(sandbox: Sandbox | None = None, token: str | None = None) -> Fast
     async def call(req: CallRequest) -> dict[str, Any]:
         result = await box.call_function(req.code, req.function_name, req.args, req.limits.to_limits())
         return result.to_dict()
+
+    if diag:
+        # Development-only diagnostics (WORKER_ENABLE_DIAG=true). Still requires
+        # the worker token, and reports no secrets or environment values.
+        @app.get("/_diag", dependencies=[Depends(require_token)])
+        async def diagnostics() -> dict[str, Any]:
+            probe = await box.run_script("import sys\nprint('hello from', sys.version.split()[0])")
+            return {
+                "python_version": platform.python_version(),
+                "python_executable": box.python,
+                "platform": platform.platform(),
+                "sandbox_mode": box.mode,
+                "uid_isolated": box.isolate_uids,
+                "rlimits_available": IS_POSIX,
+                "cgroup": _cgroup_version(),
+                "ceiling": asdict(box.ceiling),
+                "max_concurrent_jobs": box.max_concurrent,
+                "env_whitelist": list(ENV_WHITELIST),
+                "self_test": probe.to_dict(),
+            }
+
+        log.warning("Diagnostics endpoint /_diag is enabled. Disable it outside development.")
 
     return app

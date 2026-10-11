@@ -25,6 +25,7 @@ describe("PlaygroundPage", () => {
           duration_ms: 18,
           truncated: false,
           error_type: null,
+          kill_reason: null,
           explanation: null,
         }),
     });
@@ -54,5 +55,19 @@ describe("PlaygroundPage", () => {
     mockFetch({});
     renderWithApp(<PlaygroundPage />, "/playground");
     expect(await screen.findByRole("link", { name: "Sign in to save snippets" })).toBeInTheDocument();
+  });
+});
+
+describe("PlaygroundPage error details", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("passes the worker's development detail through to the console", async () => {
+    mockFetch({
+      "POST /execute": () =>
+        jsonResponse({ detail: "The code runner is unavailable right now. (auth: invalid worker token)" }, 503),
+    });
+    renderWithApp(<PlaygroundPage />, "/playground");
+    await userEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("auth: invalid worker token"));
   });
 });

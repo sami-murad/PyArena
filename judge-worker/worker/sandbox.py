@@ -53,6 +53,27 @@ MEMORY_LIMIT = "MEMORY_LIMIT"
 OUTPUT_LIMIT = "OUTPUT_LIMIT"
 INTERNAL_ERROR = "INTERNAL_ERROR"
 
+# Why the sandbox stopped a program (None when it ended on its own).
+KILL_OOM = "oom"  # memory limit: MemoryError, SIGSEGV from exhausted memory, or a SIGKILL we did not send
+KILL_CPU = "cpu"  # RLIMIT_CPU reached (SIGXCPU)
+KILL_WALL = "wall"  # wall-clock timeout, e.g. sleeping or waiting for input
+KILL_OUTPUT = "output"  # stdout+stderr exceeded the output cap
+KILL_SIGNAL = "signal"  # any other fatal signal
+
+# Threat: secrets or host configuration leaking into user code through
+# environment variables. Child processes get ONLY these names, with values set
+# by the sandbox; nothing is copied from the worker's own environment.
+ENV_WHITELIST = (
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "PYTHONUNBUFFERED",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTHONIOENCODING",
+    "HOME",
+    "TMPDIR",
+)
+
 
 @dataclass(frozen=True)
 class Limits:
@@ -88,6 +109,7 @@ class RunResult:
     return_value: Any = None
     has_return_value: bool = False
     error_type: str | None = None
+    kill_reason: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -102,7 +124,7 @@ class RunResult:
 # participant's function returned.  Correctness is decided by the backend.
 # --------------------------------------------------------------------------
 _HARNESS_SOURCE = r"""
-import json, os, sys, traceback
+import importlib.util, json, os, sys, traceback
 
 def _load():
     with open("_call.json", "r", encoding="utf-8") as fh:
@@ -126,25 +148,32 @@ def _to_json(value):
     raise TypeError("unsupported return type: " + type(value).__name__)
 
 def _report_user_error(exc):
-    frames = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename == "solution.py"]
+    frames = [f for f in traceback.extract_tb(exc.__traceback__) if os.path.basename(f.filename) == "solution.py"]
     lines = ["Traceback (most recent call last):\n"] if frames else []
     lines += traceback.format_list(frames)
     lines += traceback.format_exception_only(type(exc), exc)
     sys.stderr.write("".join(lines))
     sys.stderr.flush()
 
+# Load the participant's file as a real module named "solution" with importlib,
+# so tracebacks, __name__ and module globals behave exactly as in normal Python.
+_path = os.path.join(os.getcwd(), "solution.py")
+_module_spec = importlib.util.spec_from_file_location("solution", _path)
+_module = importlib.util.module_from_spec(_module_spec)
+sys.modules["solution"] = _module
 try:
-    with open("solution.py", "r", encoding="utf-8") as fh:
-        _src = fh.read()
-    _code = compile(_src, "solution.py", "exec")
+    _module_spec.loader.exec_module(_module)
 except SyntaxError as exc:
     sys.stderr.write("".join(traceback.format_exception_only(type(exc), exc)))
     sys.exit(1)
+except SystemExit:
+    raise
+except BaseException as exc:
+    _report_user_error(exc)
+    sys.exit(1)
 
-_ns = {"__name__": "solution", "__builtins__": __builtins__}
 try:
-    exec(_code, _ns)
-    _fn = _ns.get(_fn_name)
+    _fn = getattr(_module, _fn_name, None)
     if not callable(_fn):
         raise NameError(f"function '{_fn_name}' is not defined in your solution")
     _result = _fn(*_args)
@@ -259,7 +288,7 @@ class Sandbox:
                     os.chown(Path(workdir, name), uid, uid)
             result = await self._spawn(workdir, argv, stdin, lim, uid)
             result.stderr = _clean_stderr(result.stderr, workdir, script_name)
-            if result.status not in (OK, TIMEOUT, OUTPUT_LIMIT):
+            if result.status not in (OK, TIMEOUT, OUTPUT_LIMIT) or result.kill_reason == KILL_OOM:
                 _classify_error(result)
             return result
         except Exception as exc:  # infrastructure failure, never the user's fault
@@ -274,12 +303,16 @@ class Sandbox:
     async def _spawn(self, workdir: str, argv: list[str], stdin: str, lim: Limits, uid: int) -> RunResult:
         env = {
             "PATH": "/usr/local/bin:/usr/bin:/bin",
-            "HOME": workdir,
             "LANG": "C.UTF-8",
-            "PYTHONIOENCODING": "utf-8",
-            "PYTHONDONTWRITEBYTECODE": "1",
+            "LC_ALL": "C.UTF-8",
             "PYTHONUNBUFFERED": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONIOENCODING": "utf-8",
+            # Scratch files stay inside the job directory, which is deleted afterwards.
+            "HOME": workdir,
+            "TMPDIR": workdir,
         }
+        assert set(env) <= set(ENV_WHITELIST)
         if os.name == "nt":  # Windows needs SYSTEMROOT to start Python at all.
             env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "C:\\Windows")
         cmd = [self.python, "-I", "-B", *argv]
@@ -322,9 +355,12 @@ class Sandbox:
 
         async def feed() -> None:
             assert proc.stdin is not None
+            # Always bytes (b"" when there is no input), then EOF: a program that
+            # calls input() with nothing left gets EOFError instead of hanging.
+            data = (stdin or "").encode("utf-8")
             try:
-                if stdin:
-                    proc.stdin.write(stdin.encode("utf-8"))
+                if data:
+                    proc.stdin.write(data)
                     await proc.stdin.drain()
             except (BrokenPipeError, ConnectionResetError):
                 pass
@@ -348,10 +384,11 @@ class Sandbox:
         )
 
         status: str | None = None
+        kill_reason: str | None = None
         if overflow_task in done:
-            status = OUTPUT_LIMIT
+            status, kill_reason = OUTPUT_LIMIT, KILL_OUTPUT
         elif wait_task not in done:
-            status = TIMEOUT
+            status, kill_reason = TIMEOUT, KILL_WALL
         if status is not None:
             _kill_tree(proc)
             try:
@@ -371,8 +408,18 @@ class Sandbox:
         if status is None:
             if code == 0:
                 status = OK
-            elif IS_POSIX and code is not None and code < 0 and -code in (signal.SIGXCPU, signal.SIGKILL):
-                status = TIMEOUT
+            elif IS_POSIX and code is not None and code == -signal.SIGXCPU:
+                status, kill_reason = TIMEOUT, KILL_CPU
+            elif IS_POSIX and code is not None and code == -signal.SIGKILL:
+                # We did not send this SIGKILL (ours are handled above), so the
+                # kernel did: either the hard CPU limit (when the program ignored
+                # SIGXCPU) or the container's memory cgroup OOM killer. CPU time
+                # can never exceed wall time, so a run shorter than the CPU limit
+                # must have been killed for memory.
+                if duration_ms >= lim.cpu_seconds * 1000:
+                    status, kill_reason = TIMEOUT, KILL_CPU
+                else:
+                    status, kill_reason = MEMORY_LIMIT, KILL_OOM
             else:
                 status = RUNTIME_ERROR
 
@@ -383,6 +430,7 @@ class Sandbox:
             exit_code=code,
             duration_ms=duration_ms,
             truncated=status == OUTPUT_LIMIT,
+            kill_reason=kill_reason,
         )
 
 
@@ -482,6 +530,7 @@ def _classify_error(result: RunResult) -> None:
         result.status = SYNTAX_ERROR
     elif error_type == "MemoryError":
         result.status = MEMORY_LIMIT
+        result.kill_reason = KILL_OOM
     elif result.status == OK:
         return
     elif result.exit_code is not None and result.exit_code < 0:
@@ -492,4 +541,7 @@ def _classify_error(result: RunResult) -> None:
         if result.exit_code == -getattr(signal, "SIGSEGV", 11):
             # Usually caused by exhausting memory or recursion depth inside C code.
             result.status = MEMORY_LIMIT
+            result.kill_reason = KILL_OOM
+        elif result.kill_reason is None:
+            result.kill_reason = KILL_SIGNAL
         result.stderr = (result.stderr + f"\nProcess was terminated by signal {sig}.").strip()

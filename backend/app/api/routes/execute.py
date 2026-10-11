@@ -30,10 +30,11 @@ async def execute(body: ExecuteRequest, ctx: Ctx) -> ExecuteResponse:
     try:
         result = await ctx.executor.run(body.code, body.stdin, limits)
     except ExecutionUnavailable as exc:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "The code runner is unavailable right now. Check that the judge worker is running, then try again.",
-        ) from exc
+        message = "The code runner is unavailable right now. Check that the judge worker is running, then try again."
+        if s.environment != "production":
+            # In development, say exactly what went wrong (wrong token, worker down...).
+            message += f" ({exc.reason}: {exc.detail or exc})"
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, message) from exc
     explanation = explain(result.status, result.error_type, result.stderr)
     return ExecuteResponse(
         status=result.status,
@@ -43,5 +44,6 @@ async def execute(body: ExecuteRequest, ctx: Ctx) -> ExecuteResponse:
         duration_ms=result.duration_ms,
         truncated=result.truncated,
         error_type=result.error_type,
+        kill_reason=result.kill_reason,
         explanation=ExplanationOut(**explanation.to_dict()) if explanation else None,
     )

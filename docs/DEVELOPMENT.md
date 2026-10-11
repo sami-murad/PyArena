@@ -47,6 +47,23 @@ Open http://localhost:5173. The Vite dev server proxies `/api` and `/socket.io` 
 - **Database:** install PostgreSQL and create a `pyarena` user and database, or use SQLite by setting `DATABASE_URL=sqlite+aiosqlite:///./pyarena-dev.db` in `backend/.env`.
 - **Worker:** `START_WORKER=1 bash scripts/dev.sh` (or `scripts\dev.ps1 -StartWorker`). On Linux/macOS this applies resource limits; on Windows only time and output limits. Do not run untrusted code this way.
 
+## Smoke tests for code execution
+
+Four tests in `judge-worker/tests/test_smoke.py` check the whole execution path: print, input round trip, function harness, and a surfaced syntax error. Run them in-process, and against the Docker worker:
+
+```bash
+cd judge-worker
+.venv/bin/python -m pytest tests/test_smoke.py                       # local sandbox (http variants skipped)
+docker compose -f ../docker-compose.dev.yml up -d --build worker
+WORKER_SMOKE_URL=http://127.0.0.1:8001 WORKER_SMOKE_TOKEN=dev-only-worker-token \
+  .venv/bin/python -m pytest tests/test_smoke.py -v                    # local + Docker: 8 passed
+curl -s -H "X-Worker-Token: dev-only-worker-token" http://127.0.0.1:8001/_diag
+```
+
+On Windows PowerShell set the variables first: `$env:WORKER_SMOKE_URL="http://127.0.0.1:8001"; $env:WORKER_SMOKE_TOKEN="dev-only-worker-token"`, then run `.venv\Scripts\python.exe -m pytest tests\test_smoke.py -v`.
+
+`/_diag` (development only, needs the token) reports the Python version, sandbox mode (`uid-isolated` in Docker), cgroup version and limits, and runs a tiny self-test.
+
 ## Tests and quality checks
 
 ```bash

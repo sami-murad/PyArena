@@ -6,7 +6,7 @@ import { ErrorExplanation } from "@/features/playground/components/ErrorExplanat
 import type { RunPhase } from "@/features/playground/hooks/useCodeRunner";
 import type { ExecuteResponse } from "@/types/api";
 import { formatDuration } from "@/utils/format";
-import { executionLabels } from "@/utils/status";
+import { executionLabels, killReasonLabels } from "@/utils/status";
 
 interface OutputConsoleProps {
   phase: RunPhase;
@@ -61,7 +61,15 @@ export function OutputConsole({ phase, result, error }: OutputConsoleProps) {
             {!result.stdout && !result.stderr && result.status === "OK" && (
               <p className="console__placeholder">The program finished without printing anything.</p>
             )}
-            {result.truncated && <p className="console__note">Output was cut off at the size limit.</p>}
+            {/* Raw stdout and stderr are always shown first; this only adds why the run stopped. */}
+            {result.kill_reason && (
+              <p className="console__note" data-kill-reason={result.kill_reason}>
+                {killReasonLabels[result.kill_reason]}
+              </p>
+            )}
+            {result.truncated && !result.kill_reason && (
+              <p className="console__note">Output was cut off at the size limit.</p>
+            )}
             {result.explanation && <ErrorExplanation explanation={result.explanation} />}
           </>
         )}

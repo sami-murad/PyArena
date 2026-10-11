@@ -34,6 +34,9 @@ export interface Explanation {
   line: number | null;
 }
 
+/** Why the sandbox stopped a program; null when it ended on its own. */
+export type KillReason = "oom" | "cpu" | "wall" | "output" | "signal";
+
 export interface ExecuteResponse {
   status: ExecutionStatus;
   stdout: string;
@@ -42,6 +45,7 @@ export interface ExecuteResponse {
   duration_ms: number;
   truncated: boolean;
   error_type: string | null;
+  kill_reason: KillReason | null;
   explanation: Explanation | null;
 }
 

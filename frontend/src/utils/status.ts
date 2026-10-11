@@ -1,5 +1,5 @@
 import type { Tone } from "@/components/feedback/StatusBadge";
-import type { CompetitionStatus, Difficulty, ExecutionStatus, SubmissionStatus } from "@/types/api";
+import type { CompetitionStatus, Difficulty, ExecutionStatus, KillReason, SubmissionStatus } from "@/types/api";
 
 export const executionLabels: Record<ExecutionStatus, { label: string; tone: Tone }> = {
   OK: { label: "Finished", tone: "success" },
@@ -8,6 +8,15 @@ export const executionLabels: Record<ExecutionStatus, { label: string; tone: Ton
   TIMEOUT: { label: "Time limit", tone: "warning" },
   MEMORY_LIMIT: { label: "Memory limit", tone: "warning" },
   OUTPUT_LIMIT: { label: "Output limit", tone: "warning" },
+};
+
+/** Plain-language reason shown under the output when the sandbox stopped a run. */
+export const killReasonLabels: Record<KillReason, string> = {
+  oom: "Stopped by the sandbox: the program used more memory than allowed.",
+  cpu: "Stopped by the sandbox: the CPU time limit was reached.",
+  wall: "Stopped by the sandbox: the program ran too long (it may be waiting for input or sleeping).",
+  output: "Stopped by the sandbox: the program printed more than the output limit.",
+  signal: "Stopped by the operating system with a fatal signal.",
 };
 
 export const submissionLabels: Record<SubmissionStatus, { label: string; tone: Tone }> = {

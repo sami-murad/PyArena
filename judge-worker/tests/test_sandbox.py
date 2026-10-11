@@ -156,3 +156,94 @@ async def test_http_rejects_bad_function_name() -> None:
             "/call", json={"code": "", "function_name": "a; import os", "args": []}, headers={"X-Worker-Token": "t"}
         )
         assert r.status_code == 422
+
+
+# ---------------------------------------------------------------- Phase 1 additions
+
+
+async def test_environment_is_exactly_the_whitelist(box: Sandbox) -> None:
+    from worker.sandbox import ENV_WHITELIST
+
+    r = await box.run_script("import os\nprint(','.join(sorted(os.environ)))")
+    names = set(r.stdout.strip().split(","))
+    # Python itself may add LC_CTYPE when it coerces the C locale.
+    assert names - {"LC_CTYPE"} <= set(ENV_WHITELIST)
+    assert {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL"} <= names
+
+
+async def test_tmpdir_points_inside_the_job(box: Sandbox) -> None:
+    r = await box.run_script("import os, tempfile\nprint(tempfile.gettempdir() == os.getcwd())")
+    assert r.stdout == "True\n"
+
+
+async def test_missing_input_ends_with_eof_not_a_hang(box: Sandbox) -> None:
+    r = await box.run_script("input()")
+    assert r.status == "RUNTIME_ERROR"
+    assert r.error_type == "EOFError"
+    assert r.kill_reason is None
+    assert r.duration_ms < 2500
+
+
+async def test_kill_reason_wall(box: Sandbox) -> None:
+    r = await box.run_script("import time\ntime.sleep(30)")
+    assert (r.status, r.kill_reason) == ("TIMEOUT", "wall")
+
+
+async def test_kill_reason_cpu(box: Sandbox) -> None:
+    r = await box.run_script("while True:\n    pass")
+    assert r.status == "TIMEOUT"
+    assert r.kill_reason in ("cpu", "wall")  # "wall" only on platforms without RLIMIT_CPU
+    if os.name == "posix":
+        assert r.kill_reason == "cpu"
+
+
+async def test_kill_reason_output(box: Sandbox) -> None:
+    r = await box.run_script("while True:\n    print('x' * 100)")
+    assert (r.status, r.kill_reason) == ("OUTPUT_LIMIT", "output")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="rlimits are POSIX only")
+async def test_kill_reason_oom(box: Sandbox) -> None:
+    r = await box.run_script("x = bytearray(1024 * 1024 * 1024)")
+    assert (r.status, r.kill_reason) == ("MEMORY_LIMIT", "oom")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="signals are POSIX only")
+async def test_kill_reason_signal(box: Sandbox) -> None:
+    r = await box.run_script("import os, signal\nos.kill(os.getpid(), signal.SIGABRT)")
+    assert r.status == "RUNTIME_ERROR"
+    assert r.kill_reason == "signal"
+    assert "SIGABRT" in r.stderr
+
+
+async def test_ordinary_exception_has_no_kill_reason(box: Sandbox) -> None:
+    r = await box.run_script("raise ValueError('nope')")
+    assert r.kill_reason is None
+
+
+async def test_harness_loads_solution_as_a_real_module(box: Sandbox) -> None:
+    code = "import sys\ndef f():\n    return [__name__, 'solution' in sys.modules]"
+    r = await box.call_function(code, "f", [])
+    assert r.return_value == ["solution", True]
+
+
+async def test_harness_error_at_import_time(box: Sandbox) -> None:
+    r = await box.call_function("x = 1 / 0\ndef f():\n    return 1", "f", [])
+    assert r.error_type == "ZeroDivisionError"
+    assert 'File "solution.py", line 1' in r.stderr
+    assert "_pyarena_harness" not in r.stderr
+
+
+async def test_diag_is_off_by_default_and_needs_token_when_on() -> None:
+    off = create_app(Sandbox(ceiling=FAST), token="t", enable_diag=False)
+    async with AsyncClient(transport=ASGITransport(app=off), base_url="http://w") as client:
+        assert (await client.get("/_diag", headers={"X-Worker-Token": "t"})).status_code == 404
+
+    on = create_app(Sandbox(ceiling=FAST), token="t", enable_diag=True)
+    async with AsyncClient(transport=ASGITransport(app=on), base_url="http://w") as client:
+        assert (await client.get("/_diag")).status_code == 401
+        body = (await client.get("/_diag", headers={"X-Worker-Token": "t"})).json()
+    assert body["self_test"]["status"] == "OK"
+    assert body["self_test"]["stdout"].startswith("hello from")
+    assert "t" not in body["env_whitelist"]
+    assert "WORKER_TOKEN" not in str(body)

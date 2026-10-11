@@ -8,14 +8,27 @@ engine (for example Judge0 on a Linux server) can be plugged in later.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
 
+log = logging.getLogger("pyarena.execution")
+
 
 class ExecutionUnavailable(Exception):
-    """The execution service could not be reached or failed internally."""
+    """The execution service could not be reached or failed internally.
+
+    ``reason`` is a short machine-readable code (``unreachable``, ``timeout``,
+    ``auth``, ``bad_status``, ``internal``) and ``detail`` carries what the
+    worker said, for logs and development-mode error messages.
+    """
+
+    def __init__(self, message: str, reason: str = "internal", detail: str = "") -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.detail = detail
 
 
 @dataclass
@@ -43,6 +56,7 @@ class ExecResult:
     duration_ms: int = 0
     truncated: bool = False
     error_type: str | None = None
+    kill_reason: str | None = None
     return_value: Any = None
     has_return_value: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
@@ -64,24 +78,48 @@ class Executor(Protocol):
     async def health(self) -> dict[str, Any]: ...
 
 
+def _worker_detail(response: httpx.Response) -> str:
+    """The worker's own error message, shortened for logs."""
+    try:
+        body = response.json()
+        detail = body.get("detail", body) if isinstance(body, dict) else body
+    except ValueError:
+        detail = response.text
+    return str(detail)[:300]
+
+
 class WorkerExecutor:
-    def __init__(self, base_url: str, token: str, timeout_seconds: float) -> None:
+    def __init__(self, base_url: str, token: str, timeout_seconds: float, connect_timeout_seconds: float = 3.0) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            timeout=httpx.Timeout(timeout_seconds, connect=3.0),
+            timeout=httpx.Timeout(timeout_seconds, connect=connect_timeout_seconds),
             headers={"X-Worker-Token": token},
         )
 
     async def _post(self, path: str, payload: dict[str, Any]) -> ExecResult:
         try:
             response = await self._client.post(path, json=payload)
+        except httpx.ConnectError as exc:
+            log.warning("judge worker unreachable at %s: %s", self._client.base_url, exc)
+            raise ExecutionUnavailable(
+                "execution service unreachable", "unreachable", f"cannot connect to {self._client.base_url}"
+            ) from exc
+        except httpx.TimeoutException as exc:
+            log.warning("judge worker timed out: %s", type(exc).__name__)
+            raise ExecutionUnavailable("execution service timed out", "timeout", type(exc).__name__) from exc
         except httpx.HTTPError as exc:
-            raise ExecutionUnavailable(f"execution service unreachable ({type(exc).__name__})") from exc
+            log.warning("judge worker request failed: %s", type(exc).__name__)
+            raise ExecutionUnavailable("execution service request failed", "bad_status", type(exc).__name__) from exc
+
         if response.status_code != 200:
-            raise ExecutionUnavailable(f"execution service returned HTTP {response.status_code}")
+            detail = _worker_detail(response)
+            reason = "auth" if response.status_code == 401 else "bad_status"
+            log.warning("judge worker returned HTTP %s: %s", response.status_code, detail)
+            raise ExecutionUnavailable(f"execution service returned HTTP {response.status_code}", reason, detail)
         result = ExecResult.from_json(response.json())
         if result.status == "INTERNAL_ERROR":
-            raise ExecutionUnavailable("execution service internal error")
+            log.error("judge worker internal error: %s", result.stderr)
+            raise ExecutionUnavailable("execution service internal error", "internal", result.stderr[:300])
         return result
 
     async def run(self, code: str, stdin: str, limits: ExecLimits) -> ExecResult:

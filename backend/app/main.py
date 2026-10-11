@@ -88,7 +88,12 @@ def create_app(
     settings: Settings | None = None, executor: Executor | None = None, bus: EventBus | None = None
 ) -> socketio.ASGIApp:
     settings = settings or get_settings()
-    executor = executor or WorkerExecutor(settings.worker_url, settings.worker_token, settings.worker_timeout_seconds)
+    executor = executor or WorkerExecutor(
+        settings.worker_url,
+        settings.worker_token,
+        settings.worker_timeout_seconds,
+        settings.worker_connect_timeout_seconds,
+    )
     sio = create_socket_server(settings.cors_origins)
     ctx = build_context(settings, executor, bus or SocketIOBus(sio))
     fastapi_app = create_fastapi_app(ctx)

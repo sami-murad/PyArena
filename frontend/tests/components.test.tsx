@@ -61,6 +61,7 @@ const failed: ExecuteResponse = {
   duration_ms: 31,
   truncated: false,
   error_type: "ZeroDivisionError",
+  kill_reason: null,
   explanation: { title: "Division by zero", summary: "A number was divided by zero.", tips: ["Check the divisor."], line: 2 },
 };
 
@@ -72,6 +73,24 @@ describe("OutputConsole", () => {
     expect(screen.getByText("Division by zero")).toBeInTheDocument();
     expect(screen.getByText("Line 2")).toBeInTheDocument();
     expect(screen.getByText("31 ms")).toBeInTheDocument();
+  });
+
+  it("keeps the raw output and adds why the sandbox stopped the run", () => {
+    render(
+      <OutputConsole
+        phase="done"
+        result={{ ...failed, status: "TIMEOUT", stdout: "tick\n", stderr: "", kill_reason: "wall", explanation: null }}
+        error={null}
+      />,
+    );
+    expect(screen.getByText("tick")).toBeInTheDocument();
+    expect(screen.getByText("Time limit")).toBeInTheDocument();
+    expect(screen.getByText(/ran too long/)).toHaveAttribute("data-kill-reason", "wall");
+  });
+
+  it("shows no stop reason for a normal error", () => {
+    const { container } = render(<OutputConsole phase="done" result={failed} error={null} />);
+    expect(container.querySelector("[data-kill-reason]")).toBeNull();
   });
 
   it("shows network failures distinctly", () => {

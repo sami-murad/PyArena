@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -23,4 +25,7 @@ class ExecuteResponse(BaseModel):
     duration_ms: int
     truncated: bool
     error_type: str | None
+    kill_reason: Literal["oom", "cpu", "wall", "output", "signal"] | None = Field(
+        None, description="Why the sandbox stopped the program; null when it ended on its own"
+    )
     explanation: ExplanationOut | None

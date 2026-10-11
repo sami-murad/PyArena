@@ -73,3 +73,22 @@ async def test_execute_rate_limit(client: AsyncClient, ctx: AppContext) -> None:
     ctx.settings.rate_execute_per_minute = 2
     codes = [(await client.post("/api/execute", json={"code": "print(1)"})).status_code for _ in range(3)]
     assert codes == [200, 200, 429]
+
+
+async def test_kill_reasons_reach_the_client(client: AsyncClient) -> None:
+    sleepy = (await client.post("/api/execute", json={"code": "import time\ntime.sleep(30)"})).json()
+    assert (sleepy["status"], sleepy["kill_reason"]) == ("TIMEOUT", "wall")
+    spin = (await client.post("/api/execute", json={"code": "while True: pass"})).json()
+    assert spin["kill_reason"] == "cpu"
+    ok = (await client.post("/api/execute", json={"code": "print(1)"})).json()
+    assert ok["kill_reason"] is None
+
+
+async def test_outage_detail_only_outside_production(client: AsyncClient, ctx: AppContext, executor) -> None:  # type: ignore[no-untyped-def]
+    executor.fail = True
+    dev = (await client.post("/api/execute", json={"code": "print(1)"})).json()["detail"]
+    assert "simulated outage" in dev
+    ctx.settings.environment = "production"
+    prod = (await client.post("/api/execute", json={"code": "print(1)"})).json()["detail"]
+    assert "simulated outage" not in prod
+    assert "unavailable" in prod

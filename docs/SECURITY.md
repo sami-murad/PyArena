@@ -18,6 +18,12 @@ All submitted Python is treated as hostile. It never runs in the API process. Th
 | Capabilities limited to SETUID, SETGID, KILL, CHOWN, DAC_OVERRIDE, FOWNER; no-new-privileges | yes | n/a | n/a |
 | Can reach the database | no (not on the `data` network) | depends on your machine | depends on your machine |
 
+**Environment whitelist.** A job receives only `PATH, LANG, LC_ALL, PYTHONUNBUFFERED, PYTHONDONTWRITEBYTECODE, PYTHONIOENCODING, HOME, TMPDIR` (`ENV_WHITELIST` in `sandbox.py`), with values set by the sandbox. `HOME` and `TMPDIR` point into the job directory, which is deleted afterwards. Nothing is copied from the worker's environment. Threat addressed: secrets or host configuration leaking to user code. Tested by `test_environment_is_exactly_the_whitelist` and `test_tmpdir_points_inside_the_job`.
+
+**Kill reasons.** Every run that the sandbox stops reports why: `oom`, `cpu`, `wall`, `output` or `signal`. This is diagnostic information for users and operators, not a new security control. An unexplained `SIGKILL` is classified as `cpu` when the run lasted at least the CPU limit, otherwise `oom` (CPU time can never exceed wall time).
+
+**Diagnostics endpoint.** `GET /_diag` exists only when `WORKER_ENABLE_DIAG=true` (set in `docker-compose.dev.yml`, never in `docker-compose.yml`). It still requires the worker token and reports versions, sandbox mode and limits, never environment values or secrets. Tested by `test_diag_is_off_by_default_and_needs_token_when_on`.
+
 **Only the Docker mode is meant for code you do not trust.** The local modes exist for development convenience.
 
 ### What is not protected

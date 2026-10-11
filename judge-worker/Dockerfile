@@ -8,12 +8,18 @@ FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    WORKER_WORK_ROOT=/sandbox
+    WORKER_WORK_ROOT=/sandbox \
+    WORKER_ENABLE_DIAG=false
 
 WORKDIR /worker
 COPY requirements.txt .
+# The last two commands fail the build early if the interpreter the sandbox
+# launches is missing or lacks the modules it depends on. The official image
+# already provides python3 at /usr/local/bin, so no apt install or symlink is needed.
 RUN pip install --no-cache-dir -r requirements.txt \
-    && mkdir -p /sandbox
+    && mkdir -p /sandbox \
+    && python3 -c "import sys, resource, importlib.util; assert sys.version_info >= (3, 12); print('python ok', sys.version)" \
+    && test "$(command -v python3)" = "/usr/local/bin/python3"
 
 COPY worker ./worker
 COPY runner.py .
