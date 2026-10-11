@@ -1,0 +1,30 @@
+{
+  "description": "Per-job seccomp policy for PyArena. Loaded by worker/seccomp.py and installed in every job process right before it starts Python. Everything not listed is allowed; the container's own (Docker default) seccomp profile still applies on top of this.",
+  "deny_errno": "EPERM",
+  "deny": {
+    "debugging other processes": ["ptrace", "process_vm_readv", "process_vm_writev", "kcmp"],
+    "kernel attack surface": ["bpf", "perf_event_open", "userfaultfd", "io_uring_setup", "io_uring_enter", "io_uring_register"],
+    "kernel keyring": ["keyctl", "add_key", "request_key"],
+    "filesystems and mounts": ["mount", "umount2", "pivot_root", "chroot", "mount_setattr", "open_tree", "move_mount", "fsopen", "fsconfig", "fsmount", "fspick", "name_to_handle_at", "open_by_handle_at"],
+    "namespaces": ["unshare", "setns"],
+    "host administration": ["kexec_load", "kexec_file_load", "init_module", "finit_module", "delete_module", "reboot", "swapon", "swapoff", "acct", "quotactl", "syslog", "iopl", "ioperm"]
+  },
+  "deny_enosys": {
+    "clone3 cannot be filtered by flags (its arguments are in memory), so it reports 'not implemented' and the C library falls back to clone, which is filtered below": ["clone3"]
+  },
+  "deny_clone_flags": {
+    "CLONE_NEWNS": 131072,
+    "CLONE_NEWCGROUP": 33554432,
+    "CLONE_NEWUTS": 67108864,
+    "CLONE_NEWIPC": 134217728,
+    "CLONE_NEWUSER": 268435456,
+    "CLONE_NEWPID": 536870912,
+    "CLONE_NEWNET": 1073741824
+  },
+  "deny_socket_families": {
+    "AF_INET": 2,
+    "AF_INET6": 10,
+    "AF_NETLINK": 16,
+    "AF_PACKET": 17
+  }
+}

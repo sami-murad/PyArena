@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from .cgroups import build_from_env as build_cgroups
 from .sandbox import ENV_WHITELIST, IS_POSIX, Limits, Sandbox
 
 log = logging.getLogger("pyarena.worker")
@@ -82,6 +83,8 @@ def create_app(sandbox: Sandbox | None = None, token: str | None = None, enable_
         ceiling=_ceiling_from_env(),
         max_concurrent=int(os.getenv("WORKER_MAX_CONCURRENT_JOBS", "4")),
         work_root=os.getenv("WORKER_WORK_ROOT") or None,
+        seccomp_mode=os.getenv("WORKER_SECCOMP", "auto"),
+        cgroups=build_cgroups(),
     )
     secret = token if token is not None else os.getenv("WORKER_TOKEN", "")
     if not secret:
@@ -90,7 +93,7 @@ def create_app(sandbox: Sandbox | None = None, token: str | None = None, enable_
     diag = _diag_enabled() if enable_diag is None else enable_diag
 
     app = FastAPI(title="PyArena Judge Worker", docs_url=None, redoc_url=None, openapi_url=None)
-    log.warning("Judge worker sandbox mode: %s", box.mode)
+    log.warning("Judge worker sandbox mode: %s, layers: %s", box.mode, box.features)
 
     def require_token(x_worker_token: str = Header(default="")) -> None:
         if not hmac.compare_digest(x_worker_token.encode(), secret.encode()):
@@ -98,7 +101,7 @@ def create_app(sandbox: Sandbox | None = None, token: str | None = None, enable_
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
-        return {"status": "ok", "mode": box.mode, "isolated": box.isolate_uids}
+        return {"status": "ok", "mode": box.mode, "isolated": box.isolate_uids, "features": box.features}
 
     @app.post("/run", dependencies=[Depends(require_token)])
     async def run(req: RunRequest) -> dict[str, Any]:
@@ -124,6 +127,8 @@ def create_app(sandbox: Sandbox | None = None, token: str | None = None, enable_
                 "uid_isolated": box.isolate_uids,
                 "rlimits_available": IS_POSIX,
                 "cgroup": _cgroup_version(),
+                "features": box.features,
+                "seccomp_denied_syscalls": list(box.seccomp.denied_syscalls) if box.seccomp else [],
                 "ceiling": asdict(box.ceiling),
                 "max_concurrent_jobs": box.max_concurrent,
                 "env_whitelist": list(ENV_WHITELIST),

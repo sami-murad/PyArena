@@ -36,6 +36,9 @@ async def _checks(ctx: AppContext) -> dict[str, Any]:
         worker = await ctx.executor.health()
         checks["executor"] = "ok"
         checks["executor_mode"] = worker.get("mode")
+        if isinstance(worker.get("features"), dict):
+            # Which sandbox layers are active (uid_isolation, rlimits, seccomp, cgroup).
+            checks["executor_features"] = worker["features"]
     except ExecutionUnavailable:
         checks["executor"] = "unavailable"
     if ctx.redis is not None:

@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -247,3 +248,171 @@ async def test_diag_is_off_by_default_and_needs_token_when_on() -> None:
     assert body["self_test"]["stdout"].startswith("hello from")
     assert "t" not in body["env_whitelist"]
     assert "WORKER_TOKEN" not in str(body)
+
+
+# ---------------------------------------------------------------- Phase 3: hardening
+
+needs_seccomp = pytest.mark.skipif(
+    Sandbox(ceiling=FAST).seccomp is None, reason="seccomp (libseccomp + Linux) not available here"
+)
+
+
+def _syscall_code(name: str, args: str) -> str:
+    """Python source that calls a raw syscall by number and prints the errno name (or OK)."""
+    import ctypes
+
+    lib = ctypes.CDLL("libseccomp.so.2")
+    lib.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+    nr = lib.seccomp_syscall_resolve_name(name.encode())
+    assert nr >= 0, name
+    return (
+        "import ctypes, errno\n"
+        "libc = ctypes.CDLL(None, use_errno=True)\n"
+        f"rc = libc.syscall({nr}, {args})\n"
+        "print('OK' if rc >= 0 else errno.errorcode[ctypes.get_errno()])\n"
+    )
+
+
+@needs_seccomp
+async def test_seccomp_blocks_ip_sockets(box: Sandbox) -> None:
+    code = (
+        "import socket\n"
+        "for fam in (socket.AF_INET, socket.AF_INET6):\n"
+        "    try:\n"
+        "        socket.socket(fam, socket.SOCK_STREAM)\n"
+        "        print('created')\n"
+        "    except PermissionError:\n"
+        "        print('blocked')\n"
+    )
+    r = await box.run_script(code)
+    assert r.stdout == "blocked\nblocked\n", r
+
+
+@needs_seccomp
+async def test_seccomp_keeps_unix_sockets_threads_and_fork_working(box: Sandbox) -> None:
+    code = (
+        "import os, socket, threading\n"
+        "a, b = socket.socketpair()\n"
+        "a.sendall(b'ping'); print(b.recv(4).decode())\n"
+        "t = threading.Thread(target=lambda: print('thread')); t.start(); t.join()\n"
+        "pid = os.fork()\n"
+        "if pid == 0:\n"
+        "    os._exit(7)\n"
+        "print('child', os.waitpid(pid, 0)[1] >> 8)\n"
+    )
+    r = await box.run_script(code)
+    assert r.stdout == "ping\nthread\nchild 7\n", r
+
+
+@needs_seccomp
+async def test_seccomp_blocks_ptrace(box: Sandbox) -> None:
+    # PTRACE_TRACEME succeeds for any process without a filter.
+    r = await box.run_script(_syscall_code("ptrace", "0, 0, 0, 0"))
+    assert r.stdout.strip() == "EPERM", r
+
+
+@needs_seccomp
+async def test_seccomp_blocks_keyring(box: Sandbox) -> None:
+    # keyctl(KEYCTL_GET_KEYRING_ID, KEY_SPEC_PROCESS_KEYRING, create=1) succeeds without a filter.
+    r = await box.run_script(_syscall_code("keyctl", "0, -2, 1"))
+    assert r.stdout.strip() == "EPERM", r
+
+
+@needs_seccomp
+async def test_seccomp_blocks_new_namespaces(box: Sandbox) -> None:
+    code = (
+        "import os\n"
+        "for flag in (os.CLONE_NEWUSER, os.CLONE_NEWNET, os.CLONE_NEWNS):\n"
+        "    try:\n"
+        "        os.unshare(flag)\n"
+        "        print('created')\n"
+        "    except PermissionError:\n"
+        "        print('blocked')\n"
+    )
+    r = await box.run_script(code)
+    assert r.stdout == "blocked\nblocked\nblocked\n", r
+
+
+@needs_seccomp
+async def test_seccomp_clone3_reports_not_implemented(box: Sandbox) -> None:
+    r = await box.run_script(_syscall_code("clone3", "0, 0"))
+    assert r.stdout.strip() == "ENOSYS", r
+
+
+@needs_seccomp
+async def test_seccomp_blocks_mount_and_bpf(box: Sandbox) -> None:
+    mount = await box.run_script(_syscall_code("mount", "b'none', b'.', b'tmpfs', 0, 0"))
+    bpf = await box.run_script(_syscall_code("bpf", "0, 0, 0"))
+    assert mount.stdout.strip() == "EPERM", mount
+    assert bpf.stdout.strip() == "EPERM", bpf
+
+
+async def test_output_cap_kills_a_single_huge_write(box: Sandbox) -> None:
+    # One 50 MB write: the worker must stop it at the cap without buffering it.
+    r = await box.run_script("import sys\nsys.stdout.write('x' * 50_000_000)\nsys.stdout.flush()")
+    assert (r.status, r.kill_reason) == ("OUTPUT_LIMIT", "output")
+    assert len(r.stdout.encode()) == FAST.max_output_bytes
+    assert r.duration_ms < 2500
+
+
+async def test_output_budget_is_shared_by_stdout_and_stderr(box: Sandbox) -> None:
+    code = "import sys\nwhile True:\n    sys.stdout.write('o' * 500)\n    sys.stderr.write('e' * 500)\n"
+    r = await box.run_script(code)
+    assert r.status == "OUTPUT_LIMIT"
+    assert len(r.stdout.encode()) + len(r.stderr.encode().split(b"\nProcess")[0]) <= FAST.max_output_bytes
+
+
+async def test_symlink_out_of_the_job_dir_cannot_delete_outside_files(box: Sandbox, tmp_path: Path) -> None:
+    # Cleanup must remove the link, never follow it.
+    canary = tmp_path / "canary.txt"
+    canary.write_text("keep me")
+    os.chmod(tmp_path, 0o755)
+    code = f"import os\nos.symlink({str(tmp_path)!r}, 'escape')\nos.symlink({str(canary)!r}, 'file')\nprint('linked')"
+    r = await box.run_script(code)
+    assert r.stdout == "linked\n"
+    assert canary.read_text() == "keep me"
+
+
+async def test_proc_self_environ_contains_only_the_whitelist(box: Sandbox) -> None:
+    from worker.sandbox import ENV_WHITELIST
+
+    os.environ["PYARENA_FAKE_SECRET"] = "s3cret"
+    try:
+        r = await box.run_script(
+            "data = open('/proc/self/environ', 'rb').read().split(b'\\0')\n"
+            "print(','.join(sorted(e.split(b'=')[0].decode() for e in data if e)))"
+        )
+    finally:
+        del os.environ["PYARENA_FAKE_SECRET"]
+    names = set(r.stdout.strip().split(","))
+    assert "s3cret" not in r.stdout
+    assert names <= set(ENV_WHITELIST)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="rlimits are POSIX only")
+async def test_mmap_of_huge_anonymous_region_fails(box: Sandbox) -> None:
+    r = await box.run_script("import mmap\nm = mmap.mmap(-1, 4 * 1024 ** 3)\nm[-1] = 1\nprint('mapped')")
+    assert r.status != "OK"
+    assert "mapped" not in r.stdout
+
+
+@pytest.mark.skipif(os.name != "posix", reason="rlimits are POSIX only")
+async def test_huge_sparse_file_for_mmap_is_refused(box: Sandbox) -> None:
+    code = (
+        "import mmap\n"
+        "with open('big.bin', 'wb') as fh:\n"
+        "    fh.truncate(8 * 1024 ** 3)\n"
+        "    m = mmap.mmap(fh.fileno(), 0)\n"
+        "print('mapped')\n"
+    )
+    r = await box.run_script(code)
+    assert r.status == "RUNTIME_ERROR"
+    assert "File too large" in r.stderr
+    assert "mapped" not in r.stdout
+
+
+async def test_health_reports_sandbox_layers() -> None:
+    app = create_app(Sandbox(ceiling=FAST), token="t")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://w") as client:
+        body = (await client.get("/health")).json()
+    assert set(body["features"]) == {"uid_isolation", "rlimits", "seccomp", "cgroup"}

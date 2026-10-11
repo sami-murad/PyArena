@@ -1,6 +1,7 @@
 """Checks that only apply in the Docker-style mode (worker started as root, one UID per job)."""
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -45,7 +46,7 @@ async def test_fork_bomb_is_contained() -> None:
     assert after.stdout == "alive\n"
 
 
-async def test_background_process_is_killed_after_job(tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_background_process_is_killed_after_job(tmp_path: Path) -> None:
     marker = tmp_path / "survived"
     os.chmod(tmp_path, 0o777)
     code = (
@@ -63,3 +64,16 @@ async def test_background_process_is_killed_after_job(tmp_path) -> None:  # type
 
     await asyncio.sleep(3)
     assert not marker.exists()
+
+
+async def test_symlink_cannot_read_root_only_files(tmp_path: Path) -> None:
+    secret = tmp_path / "root-only.txt"
+    secret.write_text("worker secret")
+    os.chmod(secret, 0o600)
+    os.chmod(tmp_path, 0o755)
+    code = (
+        f"import os\nos.symlink({str(secret)!r}, 'link')\n"
+        "try:\n    print(open('link').read())\nexcept PermissionError:\n    print('denied')\n"
+    )
+    r = await Sandbox(ceiling=FAST).run_script(code)
+    assert r.stdout == "denied\n", r

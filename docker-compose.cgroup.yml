@@ -1,0 +1,19 @@
+# Optional: per-job cgroup v2 limits (memory.max, pids.max) for the judge worker.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.cgroup.yml up -d
+#
+# Host preparation (cgroup v2 hosts only, as root, once per boot):
+#   mkdir -p /sys/fs/cgroup/pyarena-jobs
+#   echo "+memory +pids" > /sys/fs/cgroup/cgroup.subtree_control   # usually already enabled
+#
+# The worker needs to see the host's cgroup tree (cgroup: host) so it can move
+# job processes into the delegated directory, which is mounted read-write.
+# See docs/SECURITY.md, "cgroup v2 per job". Not tested on every host: check
+# GET /health on the worker reports "cgroup": true after starting.
+services:
+  worker:
+    cgroup: host
+    environment:
+      WORKER_CGROUP_ROOT: /sys/fs/cgroup/pyarena-jobs
+    volumes:
+      - /sys/fs/cgroup/pyarena-jobs:/sys/fs/cgroup/pyarena-jobs:rw

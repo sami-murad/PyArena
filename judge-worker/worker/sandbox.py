@@ -7,7 +7,10 @@ Every job runs in a brand-new Python process with:
 * kernel resource limits (CPU seconds, address space, file size, open files,
   process count) applied through ``setrlimit`` before the program starts,
 * a wall-clock timeout,
-* a hard cap on captured stdout/stderr.
+* a hard cap on captured stdout/stderr, enforced while the program writes,
+* a seccomp filter that refuses dangerous system calls (``worker/seccomp.py``),
+* optionally, a cgroup v2 group per job with a total memory and process limit
+  (``worker/cgroups.py``, enabled with ``WORKER_CGROUP_ROOT``).
 
 When the worker runs as root inside its container (the Docker setup), each
 concurrent job slot also gets its *own unprivileged UID*.  After a job ends,
@@ -32,9 +35,14 @@ import signal
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .cgroups import CgroupJobs, join_cgroup
+from .seccomp import CompiledFilter
+from .seccomp import build_from_env as build_seccomp
 
 IS_POSIX = os.name == "posix"
 if IS_POSIX:  # pragma: no branch
@@ -190,6 +198,22 @@ sys.stdout.flush()
 """
 
 
+def extract_result(stdout: str, marker: str) -> tuple[str, bool, Any]:
+    """Split the harness output into (user stdout, found, return value).
+
+    The marker is random per run and only the LAST occurrence counts, so user
+    code cannot fake a result by printing something that looks like one.
+    """
+    idx = stdout.rfind("\n" + marker)
+    if idx == -1:
+        return stdout, False, None
+    payload = stdout[idx + len(marker) + 1 :].strip()
+    try:
+        return stdout[:idx], True, json.loads(payload)
+    except (json.JSONDecodeError, RecursionError):
+        return stdout[:idx], False, None
+
+
 class SlotPool:
     """Gives each concurrent job its own UID when running as root."""
 
@@ -213,6 +237,8 @@ class Sandbox:
         base_uid: int = 20000,
         python_executable: str | None = None,
         work_root: str | None = None,
+        seccomp_mode: str = "auto",
+        cgroups: CgroupJobs | None = None,
     ) -> None:
         self.ceiling = ceiling or Limits()
         self.max_concurrent = max_concurrent
@@ -223,6 +249,18 @@ class Sandbox:
         # reaps any processes that were killed at the end of its last job.
         self._pool = SlotPool(max_concurrent * 4, base_uid)
         self._slots = asyncio.Semaphore(max_concurrent)
+        # Compiled once here; each job only installs the ready-made program.
+        self.seccomp: CompiledFilter | None = build_seccomp(seccomp_mode) if IS_POSIX else None
+        self.cgroups = cgroups
+
+    @property
+    def features(self) -> dict[str, bool]:
+        return {
+            "uid_isolation": self.isolate_uids,
+            "rlimits": IS_POSIX,
+            "seccomp": self.seccomp is not None,
+            "cgroup": self.cgroups is not None,
+        }
 
     @property
     def mode(self) -> str:
@@ -249,20 +287,15 @@ class Sandbox:
         }
         result = await self._execute(files, [HARNESS_FILE], "", limits, script_name=SOLUTION_FILE)
         if result.status == OK:
-            idx = result.stdout.rfind("\n" + marker)
-            if idx == -1:
+            stdout, found, value = extract_result(result.stdout, marker)
+            result.stdout = stdout
+            if found:
+                result.return_value = value
+                result.has_return_value = True
+            else:
                 result.status = RUNTIME_ERROR
                 result.error_type = "NoResult"
                 result.stderr = (result.stderr + "\nYour function did not return a value the judge could read.").strip()
-            else:
-                payload = result.stdout[idx + len(marker) + 1 :].strip()
-                result.stdout = result.stdout[:idx]
-                try:
-                    result.return_value = json.loads(payload)
-                    result.has_return_value = True
-                except json.JSONDecodeError:
-                    result.status = RUNTIME_ERROR
-                    result.error_type = "NoResult"
         return result
 
     # ------------------------------------------------------------ internals
@@ -278,6 +311,7 @@ class Sandbox:
         await self._slots.acquire()
         uid = await self._pool.acquire()
         workdir = tempfile.mkdtemp(prefix="pyarena-job-", dir=self.work_root)
+        cgroup: Path | None = None
         try:
             for name, content in files.items():
                 Path(workdir, name).write_text(content, encoding="utf-8")
@@ -286,21 +320,31 @@ class Sandbox:
                 os.chmod(workdir, 0o700)
                 for name in files:
                     os.chown(Path(workdir, name), uid, uid)
-            result = await self._spawn(workdir, argv, stdin, lim, uid)
+            if self.cgroups is not None:
+                cgroup = self.cgroups.create(uid, lim.memory_mb * 1024 * 1024, lim.max_processes)
+            result = await self._spawn(workdir, argv, stdin, lim, uid, cgroup)
+            if cgroup is not None and result.status != OK and CgroupJobs.oom_killed(cgroup):
+                # The kernel's OOM killer acted inside this job's group: a certain
+                # memory verdict, no need for the SIGKILL timing heuristic.
+                result.status, result.kill_reason = MEMORY_LIMIT, KILL_OOM
             result.stderr = _clean_stderr(result.stderr, workdir, script_name)
             if result.status not in (OK, TIMEOUT, OUTPUT_LIMIT) or result.kill_reason == KILL_OOM:
                 _classify_error(result)
             return result
-        except Exception as exc:  # infrastructure failure, never the user's fault
+        except Exception as exc:  # noqa: BLE001 - any failure here is infrastructure, never the user's fault
             return RunResult(status=INTERNAL_ERROR, stderr=f"Execution service error: {type(exc).__name__}")
         finally:
+            if cgroup is not None and self.cgroups is not None:
+                await asyncio.to_thread(self.cgroups.remove, cgroup)
             if self.isolate_uids:
                 await _kill_all_processes_of(uid)
             shutil.rmtree(workdir, ignore_errors=True)
             self._pool.release(uid)
             self._slots.release()
 
-    async def _spawn(self, workdir: str, argv: list[str], stdin: str, lim: Limits, uid: int) -> RunResult:
+    async def _spawn(
+        self, workdir: str, argv: list[str], stdin: str, lim: Limits, uid: int, cgroup: Path | None = None
+    ) -> RunResult:
         env = {
             "PATH": "/usr/local/bin:/usr/bin:/bin",
             "LANG": "C.UTF-8",
@@ -319,7 +363,7 @@ class Sandbox:
 
         kwargs: dict[str, Any] = {}
         if IS_POSIX:
-            kwargs["preexec_fn"] = _make_preexec(lim, uid if self.isolate_uids else None)
+            kwargs["preexec_fn"] = _make_preexec(lim, uid if self.isolate_uids else None, self.seccomp, cgroup)
             kwargs["start_new_session"] = True
 
         start = time.monotonic()
@@ -333,6 +377,12 @@ class Sandbox:
             **kwargs,
         )
 
+        # Threat: a program that prints without end fills the worker's memory or
+        # keeps a job slot busy. Both pipes share ONE byte budget. The moment a
+        # read would exceed it, the process group is killed right here, in the
+        # middle of the write, without waiting for the main loop; nothing past
+        # the budget is ever stored. Once we stop reading, the pipe buffer fills
+        # and the writer blocks, so it cannot run ahead in the meantime.
         budget = {"left": lim.max_output_bytes}
         overflow = asyncio.Event()
 
@@ -342,12 +392,11 @@ class Sandbox:
                 if not chunk:
                     return
                 room = budget["left"]
-                if room <= 0:
-                    overflow.set()
-                    return
-                sink.extend(chunk[:room])
-                budget["left"] -= min(len(chunk), room)
+                take = min(len(chunk), room)
+                sink.extend(chunk[:take])
+                budget["left"] -= take
                 if len(chunk) > room:
+                    _kill_tree(proc)
                     overflow.set()
                     return
 
@@ -367,7 +416,7 @@ class Sandbox:
             finally:
                 try:
                     proc.stdin.close()
-                except Exception:
+                except (OSError, RuntimeError):  # pipe already closed or event loop shutting down
                     pass
 
         assert proc.stdout is not None and proc.stderr is not None
@@ -434,11 +483,18 @@ class Sandbox:
         )
 
 
-def _make_preexec(lim: Limits, uid: int | None):  # pragma: no cover - runs in the child
+def _make_preexec(  # pragma: no cover - runs in the child
+    lim: Limits, uid: int | None, seccomp: CompiledFilter | None = None, cgroup: Path | None = None
+) -> Callable[[], None]:
     cpu = max(1, int(lim.cpu_seconds + 0.999))
     mem = lim.memory_mb * 1024 * 1024
 
     def preexec() -> None:
+        # Order matters: join the cgroup while still root, apply limits, drop to
+        # the job UID, and install seccomp last, right before exec (once
+        # installed it can never be removed, and it is inherited by every child).
+        if cgroup is not None:
+            join_cgroup(cgroup)
         resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 1))
         resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
         resource.setrlimit(resource.RLIMIT_FSIZE, (lim.max_file_bytes, lim.max_file_bytes))
@@ -451,6 +507,8 @@ def _make_preexec(lim: Limits, uid: int | None):  # pragma: no cover - runs in t
             os.setgroups([])
             os.setgid(uid)
             os.setuid(uid)
+        if seccomp is not None:
+            seccomp.install()
 
     return preexec
 

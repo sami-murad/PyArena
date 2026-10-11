@@ -1,0 +1,15 @@
+# Optional: run the judge worker under gVisor (a user-space kernel), the
+# strongest boundary this project supports without a separate VM.
+#
+#   1. Install runsc on the host and register it with Docker
+#      (https://gvisor.dev/docs/user_guide/install/).
+#   2. docker compose -f docker-compose.yml -f docker-compose.gvisor.yml up -d
+#
+# gVisor implements seccomp for the programs it runs, but kernels differ, so the
+# per-job filter is "auto" here: GET /health on the worker reports whether it
+# is active.
+services:
+  worker:
+    runtime: runsc
+    environment:
+      WORKER_SECCOMP: auto
