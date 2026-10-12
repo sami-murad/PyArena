@@ -45,6 +45,7 @@ export function LiveSample() {
       <textarea
         id="live-code"
         className="live__code"
+        data-lenis-prevent
         value={code}
         onChange={(e) => setCode(e.target.value)}
         spellCheck={false}
@@ -53,7 +54,7 @@ export function LiveSample() {
           if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void runner.run(code, "");
         }}
       />
-      <output className="live__out" aria-live="polite" htmlFor="live-code">
+      <output className="live__out" aria-live="polite" htmlFor="live-code" data-lenis-prevent>
         {runner.phase === "idle" ? (
           <span className="live__prompt">Press Run. This executes in a real sandbox.</span>
         ) : runner.phase === "running" && !runner.result ? (

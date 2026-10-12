@@ -10,7 +10,7 @@ import { SOUNDS, soundLength, type SoundDefinition, type SoundName } from "@/fea
  *   dropped while a higher-priority one is still playing.
  */
 const STORAGE_KEY = "pyarena:sound-muted";
-const MASTER_VOLUME = 0.18;
+const MASTER_VOLUME = 0.52;
 const UNLOCK_EVENTS = ["pointerdown", "keydown", "touchstart"] as const;
 
 type AudioContextFactory = () => AudioContext | null;

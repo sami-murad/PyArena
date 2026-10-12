@@ -2,6 +2,7 @@ import { Outlet, useMatches } from "react-router-dom";
 
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { ScrollToTop } from "@/components/ui/ScrollToTop";
 import { Mascot } from "@/features/mascot/Mascot";
 import { ReactionsBridge } from "@/features/reactions/useReactions";
 import { handleOf } from "@/features/scroll/scrollRoutes";
@@ -26,6 +27,7 @@ export function MainLayout() {
         </main>
         {!workspace && <Footer />}
       </div>
+      <ScrollToTop />
       <Mascot />
     </SmoothScroll>
   );

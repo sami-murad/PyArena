@@ -11,9 +11,9 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  /* Space for the scrollbar is always reserved, so pages do not shift sideways
-     when content grows long enough to scroll. */
-  scrollbar-gutter: stable both-edges;
+  scroll-behavior: smooth;
+  /* Reserve space for scrollbar on desktop without forcing asymmetric double gutters */
+  scrollbar-gutter: stable;
 }
 
 body {

@@ -48,7 +48,22 @@ export function SmoothScroll({ enabled, children }: SmoothScrollProps) {
 
   useEffect(() => {
     if (!enabled || reduced) return undefined;
-    const instance = new Lenis({ autoRaf: true, lerp: 0.12, smoothWheel: true, anchors: true });
+    const instance = new Lenis({
+      autoRaf: true,
+      lerp: 0.1,
+      duration: 1.0,
+      smoothWheel: true,
+      wheelMultiplier: 1.0,
+      touchMultiplier: 1.8,
+      syncTouch: true,
+      anchors: true,
+      prevent: (node) =>
+        node.hasAttribute("data-lenis-prevent") ||
+        node.tagName === "TEXTAREA" ||
+        node.tagName === "INPUT" ||
+        node.tagName === "SELECT" ||
+        Boolean(node.closest?.("[data-lenis-prevent]")),
+    });
     setCurrent(instance);
     return () => {
       instance.destroy();

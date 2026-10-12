@@ -9,8 +9,7 @@
   gap: var(--space-3);
 
   @include down($breakpoint-md) {
-    overflow: auto;
-    overscroll-behavior: contain;
+    overflow: visible;
   }
 }
 
@@ -18,14 +17,14 @@
   overflow: hidden;
 
   @include down($breakpoint-md) {
-    overflow: auto;
-    overscroll-behavior: contain;
+    overflow: visible;
   }
 }
 
 @include down($breakpoint-md) {
   .app--workspace {
     block-size: auto;
+    min-block-size: 100dvh;
     overflow: visible;
   }
 }

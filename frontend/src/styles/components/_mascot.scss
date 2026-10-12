@@ -4,7 +4,7 @@
 // The mascot dock (features/mascot/Mascot.tsx): compact while idle, grows to
 // react, then settles. Never covers the header; pointer events only on itself.
 .mascot {
-  --mascot-size: 76px;
+  --mascot-size: 108px;
   position: fixed;
   inset-block-end: var(--space-4);
   inset-inline-end: var(--space-4);
@@ -19,14 +19,57 @@
   }
 
   &--reacting {
-    --mascot-size: 124px;
+    --mascot-size: 156px;
   }
 
   @include down($breakpoint-sm) {
-    --mascot-size: 60px;
+    --mascot-size: 84px;
 
     &--reacting {
-      --mascot-size: 92px;
+      --mascot-size: 120px;
+    }
+  }
+
+  &__stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+  }
+
+  &__album-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text);
+    font-size: 11px;
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: 0 4px 12px -2px var(--color-shadow);
+    transition:
+      transform var(--duration-fast) var(--ease-out),
+      background var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+      transform: translateY(-2px) scale(1.05);
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-primary-text);
+      box-shadow: 0 6px 16px -2px var(--color-shadow);
+    }
+
+    &:focus-visible {
+      outline: var(--focus-ring-width) solid var(--color-focus);
+      outline-offset: 2px;
     }
   }
 
@@ -40,8 +83,17 @@
     cursor: pointer;
     transition:
       inline-size var(--duration-base) var(--ease-out),
-      block-size var(--duration-base) var(--ease-out);
-    filter: drop-shadow(0 6px 14px var(--color-shadow));
+      block-size var(--duration-base) var(--ease-out),
+      transform var(--duration-fast) var(--ease-out);
+    filter: drop-shadow(0 8px 18px var(--color-shadow));
+
+    &:hover {
+      transform: scale(1.04);
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
 
     &:focus-visible {
       outline: var(--focus-ring-width) solid var(--color-focus);
@@ -218,3 +270,193 @@
     transition: none !important;
   }
 }
+
+// ------------------------------------------------------------- Sticker Book
+.sticker-book {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  &__intro {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    max-inline-size: 50ch;
+    margin: 0;
+  }
+
+  &__random-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    cursor: pointer;
+    transition:
+      transform var(--duration-fast) var(--ease-out),
+      background var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+      transform: translateY(-2px);
+      background: var(--color-surface);
+      border-color: var(--color-primary);
+      color: var(--color-primary-text);
+    }
+  }
+
+  &__filters {
+    display: flex;
+    gap: var(--space-1);
+    overflow-x: auto;
+    padding-block-end: var(--space-2);
+    scrollbar-width: thin;
+  }
+
+  &__tab {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+      color: var(--color-text);
+      background: var(--color-surface);
+    }
+
+    &--active {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: var(--color-primary-text);
+      font-weight: var(--weight-bold);
+    }
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: var(--space-3);
+    max-block-size: 55vh;
+    overflow-y: auto;
+    padding: var(--space-1);
+    overscroll-behavior: contain;
+  }
+}
+
+.sticker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+
+  &:hover {
+    transform: translateY(-4px) scale(1.02);
+    border-color: var(--color-primary);
+    background: var(--color-surface-raised);
+    box-shadow: 0 10px 24px -4px var(--color-shadow);
+  }
+
+  &:active {
+    transform: translateY(-1px) scale(0.99);
+  }
+
+  &__preview {
+    position: relative;
+    inline-size: 88px;
+    block-size: 88px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__img {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+    user-select: none;
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
+  &:hover &__img {
+    transform: scale(1.08);
+  }
+
+  &__sparkle {
+    position: absolute;
+    inset-block-start: -4px;
+    inset-inline-end: -4px;
+    color: var(--color-warning);
+    animation: mascot-hop 0.8s ease-in-out infinite alternate;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    inline-size: 100%;
+  }
+
+  &__name {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-inline-size: 100%;
+  }
+
+  &__badge {
+    font-size: 10px;
+    font-weight: var(--weight-semibold);
+    padding: 1px var(--space-2);
+    border-radius: var(--radius-pill);
+    border: 1px solid currentcolor;
+
+    &--success {
+      color: var(--color-success);
+    }
+    &--danger {
+      color: var(--color-danger);
+    }
+    &--warning {
+      color: var(--color-warning);
+    }
+    &--accent {
+      color: var(--color-accent);
+    }
+  }
+}
+

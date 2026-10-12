@@ -134,6 +134,53 @@ export const SOUNDS = {
     ],
     visual: "mascot: encouraging or concerned, badge 'Round over' / 'Time's up'",
   },
+  boing: {
+    priority: 35,
+    minIntervalMs: 200,
+    notes: [
+      { freq: 220, at: 0, duration: 0.22, type: "sine", slideTo: 680, gain: 0.8 },
+      { freq: 440, at: 0.05, duration: 0.16, type: "triangle", slideTo: 720, gain: 0.5 },
+    ],
+    visual: "mascot: happy, sticker change",
+  },
+  pop: {
+    priority: 30,
+    minIntervalMs: 150,
+    notes: [
+      { freq: 880, at: 0, duration: 0.06, type: "sine", slideTo: 340, gain: 0.9 },
+    ],
+    visual: "mascot: interactive click",
+  },
+  quack: {
+    priority: 45,
+    minIntervalMs: 350,
+    notes: [
+      { freq: 360, at: 0, duration: 0.14, type: "sawtooth", slideTo: 220, gain: 0.7 },
+      { freq: 310, at: 0.12, duration: 0.16, type: "sawtooth", slideTo: 170, gain: 0.6 },
+    ],
+    visual: "mascot: concerned cartoon quack",
+  },
+  tada: {
+    priority: 55,
+    minIntervalMs: 800,
+    notes: [
+      { freq: C5, at: 0, duration: 0.09, type: "triangle", gain: 0.7 },
+      { freq: E5, at: 0.08, duration: 0.09, type: "triangle", gain: 0.7 },
+      { freq: G5, at: 0.16, duration: 0.09, type: "triangle", gain: 0.7 },
+      { freq: C6, at: 0.24, duration: 0.28, type: "triangle", gain: 0.85 },
+    ],
+    visual: "mascot: celebrate ta-da",
+  },
+  laugh: {
+    priority: 35,
+    minIntervalMs: 400,
+    notes: [
+      { freq: 587.33, at: 0, duration: 0.07, type: "sine", gain: 0.7 },
+      { freq: 659.25, at: 0.07, duration: 0.07, type: "sine", gain: 0.7 },
+      { freq: 783.99, at: 0.14, duration: 0.12, type: "sine", gain: 0.8 },
+    ],
+    visual: "mascot: giggle",
+  },
 } as const satisfies Record<string, SoundDefinition>;
 
 export type SoundName = keyof typeof SOUNDS;

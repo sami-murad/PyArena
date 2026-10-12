@@ -474,8 +474,8 @@ class Sandbox:
 
         return RunResult(
             status=status,
-            stdout=out_buf.decode("utf-8", "replace"),
-            stderr=err_buf.decode("utf-8", "replace"),
+            stdout=out_buf.decode("utf-8", "replace").replace("\r\n", "\n"),
+            stderr=err_buf.decode("utf-8", "replace").replace("\r\n", "\n"),
             exit_code=code,
             duration_ms=duration_ms,
             truncated=status == OUTPUT_LIMIT,
